@@ -17,6 +17,22 @@ const getUser = asyncWrapper(async (req, res, next) => {
   res.status(200).json(user.rows[0]);
 });
 
+const deleteUser = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+
+  const findUser = await pool.query(`SELECT * FROM app_user WHERE id = $1`, [
+    id,
+  ]);
+
+  if (findUser.rows.length <= 0) {
+    throw new ErrorResponse("User not found!", 404);
+  }
+
+  const user = await pool.query(`DELETE FROM app_user WHERE id = $1`, [id]);
+
+  res.status(200).json({ message: "User deleted!" });
+});
+
 const getAllUsers = asyncWrapper(async (req, res, next) => {
   const user = await pool.query(
     `SELECT id, name, email, role, "locationId", "isActive" FROM app_user`,
@@ -28,4 +44,5 @@ const getAllUsers = asyncWrapper(async (req, res, next) => {
 module.exports = {
   getUser,
   getAllUsers,
+  deleteUser,
 };
