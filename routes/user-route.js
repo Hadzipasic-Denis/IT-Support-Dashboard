@@ -6,10 +6,17 @@ const {
   deleteUser,
   updateUser,
 } = require("../controllers/user-controller");
+const { authenticate, authorize } = require("../middlewares/authenticate");
 
 const userRouter = express.Router();
 
+userRouter.use(authenticate)
+
 userRouter.route("/getAllUsers").get(getAllUsers);
-userRouter.route("/:id").get(getUser).delete(deleteUser).patch(updateUser);
+userRouter
+  .route("/:id")
+  .get(authorize("ADMIN"), getUser)
+  .delete(authorize("ADMIN"), deleteUser)
+  .patch(authorize("ADMIN"), updateUser);
 
 module.exports = userRouter;
