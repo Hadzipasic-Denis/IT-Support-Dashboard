@@ -14,6 +14,25 @@ const createLocation = asyncWrapper(async (req, res, next) => {
   res.status(201).json(location.rows[0]);
 });
 
+const updateLocation = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+  const { name } = req.body;
+
+  const location = await pool.query(
+    `UPDATE location SET name = $1
+             WHERE id = $2
+             RETURNING *`,
+    [name, id],
+  );
+
+  if (location.rows.length <= 0) {
+    throw new ErrorResponse("Location not found", 404);
+  }
+
+  res.status(200).json(location.rows[0]);
+});
+
 module.exports = {
-    createLocation
-}
+  createLocation,
+  updateLocation
+};
