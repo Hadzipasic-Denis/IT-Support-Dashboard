@@ -1,5 +1,6 @@
 const pool = require("../db.js");
-const bcrypt = require("bcrypt")
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const asyncWrapper = require("../utils/asyncWrapper.js");
 const ErrorResponse = require("../utils/ErrorResponse.js");
 
@@ -7,7 +8,7 @@ const register = asyncWrapper(async (req, res, next) => {
   const { email, name, password } = req.body;
 
   const lowercaseEmail = email.toLowerCase();
-  const hashedPassword = await bcrypt.hash(password, 10)
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const findUser = await pool.query(`SELECT * FROM app_user WHERE email = $1`, [
     lowercaseEmail,
@@ -26,6 +27,47 @@ const register = asyncWrapper(async (req, res, next) => {
   res.status(201).json(user.rows[0]);
 });
 
+const login = asyncWrapper(async (req, res, next) => {
+  const { email, password } = req.body;
+
+  const lowercaseEmail = email.toLowerCase();
+
+  const findUser = await pool.query("SELECT * FROM app_user WHERE email = $1", [
+    lowercaseEmail,
+  ]);
+
+  const user = findUser.rows[0];
+
+  if (!user) {
+    throw new ErrorResponse("Invalid email or password", 401);
+  }
+
+  const match = await bcrypt.compare(password, user.password);
+
+  if (!match) {
+    throw new ErrorResponse("Invalid email or password", 401);
+  }
+
+  if (!user.isActive) {
+    throw new ErrorResponse("Account is deactivated", 403);
+  }
+
+  const payload = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+  };
+  const token = jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: "480m",
+  });
+
+  res
+    .cookie("access_token", token, { httpOnly: true, maxAge: 28800000 })
+    .json(payload);
+});
+
 module.exports = {
   register,
+  login,
 };
