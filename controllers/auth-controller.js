@@ -67,7 +67,14 @@ const login = asyncWrapper(async (req, res, next) => {
     .json(payload);
 });
 
+const logout = asyncWrapper(async (req, res, next) => {
+  res
+    .cookie("access_token", "", { httpOnly: true, maxAge: 0 })
+    .json({ message: "Success" });
+});
+
 module.exports = {
   register,
   login,
+  logout
 };
