@@ -60,17 +60,18 @@ const updateUser = asyncWrapper(async (req, res, next) => {
 const deleteUser = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
 
-  const findUser = await pool.query(`SELECT * FROM app_user WHERE id = $1`, [
-    id,
-  ]);
+  const result = await pool.query(
+    `UPDATE app_user
+     SET "isActive" = false
+   WHERE id = $1`,
+    [id],
+  );
 
-  if (findUser.rows.length <= 0) {
-    throw new ErrorResponse("User not found!", 404);
+  if (result.rowCount === 0) {
+    throw new ErrorResponse("User not found", 404);
   }
 
-  const user = await pool.query(`DELETE FROM app_user WHERE id = $1`, [id]);
-
-  res.status(200).json({ message: "User deleted!" });
+  res.status(200).json({ message: "User deactivated" });
 });
 
 const getAllUsers = asyncWrapper(async (req, res, next) => {
