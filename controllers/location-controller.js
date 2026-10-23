@@ -49,8 +49,34 @@ const deleteLocation = asyncWrapper(async (req, res, next) => {
   res.status(200).json({ message: "Location deactivated" });
 });
 
+const getLocation = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+
+  const location = await pool.query(`SELECT * FROM location WHERE id = $1`, [
+    id,
+  ]);
+
+  if (location.rows.length <= 0) {
+    throw new ErrorResponse("User not found", 404);
+  }
+
+  res.status(200).json(location.rows[0]);
+});
+
+const getAllLocations = asyncWrapper(async (req, res, next) => {
+  const locations = await pool.query(
+    `SELECT *
+     FROM location
+  `,
+  );
+
+  res.status(200).json(locations.rows);
+});
+
 module.exports = {
   createLocation,
   updateLocation,
-  deleteLocation
+  deleteLocation,
+  getLocation,
+  getAllLocations,
 };
