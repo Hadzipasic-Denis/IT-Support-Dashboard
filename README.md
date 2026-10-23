@@ -1,6 +1,6 @@
 # IT-Support-Dashboard
 
-An IT support ticket system built from scratch as a portfolio project. It creates tickets from a support mailbox, routes them by category, tracks working time against an SLA, and keeps a complete audit trail of every change.
+An IT support ticket system built from scratch as a portfolio project. It creates tickets from a support mailbox, routes them by category, asigns ticket to users(AGENTS), tracks working time against an SLA, and keeps a complete audit trail of every change.
 
 This repository contains the backend API. The project is in active development; see the [roadmap](#roadmap) for what is done and what comes next.
 
@@ -16,7 +16,7 @@ This repository contains the backend API. The project is in active development; 
 ### Prerequisites
 
 - Node.js
-- A PostgreSQL database (for example a free Neon project)
+- A PostgreSQL database 
 
 ### Installation
 
@@ -122,7 +122,7 @@ utils/                # asyncWrapper, ErrorResponse
 - [x] User management: get, list, partial update, deactivate
 - [x] Auth: register with bcrypt, login with JWT cookie, logout
 - [x] Route protection and role-based authorization
-- [ ] Location management (in progress)
+- [x] Location management
 - [ ] Categories and call types
 - [ ] Seed script: System user, admin, one location, category and call type
 - [ ] Ticket endpoints with audit history and SLA clock
