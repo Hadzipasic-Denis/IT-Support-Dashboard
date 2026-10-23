@@ -32,7 +32,25 @@ const updateLocation = asyncWrapper(async (req, res, next) => {
   res.status(200).json(location.rows[0]);
 });
 
+const deleteLocation = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+
+  const location = await pool.query(
+    `UPDATE location
+     SET "isActive" = false
+   WHERE id = $1`,
+    [id],
+  );
+
+  if (location.rowCount === 0) {
+    throw new ErrorResponse("Location not found", 404);
+  }
+
+  res.status(200).json({ message: "Location deactivated" });
+});
+
 module.exports = {
   createLocation,
-  updateLocation
+  updateLocation,
+  deleteLocation
 };
