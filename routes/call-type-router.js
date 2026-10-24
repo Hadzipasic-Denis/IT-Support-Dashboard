@@ -5,6 +5,8 @@ const {
   createCallType,
   updateCallType,
   deleteCallType,
+  getAllCallTypes,
+  getCallType,
 } = require("../controllers/call-type-controller");
 
 const callTypeRouter = express.Router();
@@ -18,5 +20,11 @@ callTypeRouter
 callTypeRouter
   .route("/delete/:id")
   .delete(authenticate, authorize("ADMIN"), deleteCallType);
+callTypeRouter
+  .route("/getAllCallTypes")
+  .get(authenticate, authorize("ADMIN"), getAllCallTypes);
+callTypeRouter
+  .route("/getCallType/:id")
+  .get(authenticate, authorize("ADMIN"), getCallType);
 
 module.exports = callTypeRouter;

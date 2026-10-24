@@ -1,5 +1,6 @@
 const pool = require("../db.js");
 const asyncWrapper = require("../utils/asyncWrapper.js");
+const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const createCallType = asyncWrapper(async (req, res, next) => {
   const { name } = req.body;
@@ -48,8 +49,34 @@ const deleteCallType = asyncWrapper(async (req, res, next) => {
   res.status(200).json({ message: "Call type deactivated" });
 });
 
+const getCallType = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+
+  const callType = await pool.query(`SELECT * FROM call_type WHERE id = $1`, [
+    id,
+  ]);
+
+  if (callType.rows.length <= 0) {
+    throw new ErrorResponse("Call type not found", 404);
+  }
+
+  res.status(200).json(callType.rows[0]);
+});
+
+const getAllCallTypes = asyncWrapper(async (req, res, next) => {
+  const callTypes = await pool.query(
+    `SELECT *
+     FROM call_type
+  `,
+  );
+
+  res.status(200).json(callTypes.rows);
+});
+
 module.exports = {
   createCallType,
   updateCallType,
   deleteCallType,
+  getCallType,
+  getAllCallTypes,
 };

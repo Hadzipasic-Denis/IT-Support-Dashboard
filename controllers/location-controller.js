@@ -57,7 +57,7 @@ const getLocation = asyncWrapper(async (req, res, next) => {
   ]);
 
   if (location.rows.length <= 0) {
-    throw new ErrorResponse("User not found", 404);
+    throw new ErrorResponse("Location not found", 404);
   }
 
   res.status(200).json(location.rows[0]);
