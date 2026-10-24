@@ -13,6 +13,25 @@ const createCallType = asyncWrapper(async (req, res, next) => {
   res.status(201).json(callType.rows[0]);
 });
 
+const updateCallType = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+  const { name } = req.body;
+
+  const callType = await pool.query(
+    `UPDATE call_type SET name = $1
+             WHERE id = $2
+             RETURNING *`,
+    [name, id],
+  );
+
+  if (callType.rows.length <= 0) {
+    throw new ErrorResponse("Call type not found", 404);
+  }
+
+  res.status(200).json(callType.rows[0]);
+});
+
 module.exports = {
   createCallType,
+  updateCallType,
 };

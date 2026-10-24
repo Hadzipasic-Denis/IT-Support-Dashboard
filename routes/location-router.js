@@ -19,12 +19,11 @@ locationRouter
 locationRouter
   .route("/delete/:id")
   .delete(authenticate, authorize("ADMIN"), deleteLocation);
-  locationRouter
+locationRouter
   .route("/getAllLocations")
   .get(authenticate, authorize("ADMIN"), getAllLocations);
 locationRouter
   .route("/getLocation/:id")
   .get(authenticate, authorize("ADMIN"), getLocation);
-
 
 module.exports = locationRouter;
