@@ -31,7 +31,25 @@ const updateCallType = asyncWrapper(async (req, res, next) => {
   res.status(200).json(callType.rows[0]);
 });
 
+const deleteCallType = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+
+  const callType = await pool.query(
+    `UPDATE call_type
+     SET "isActive" = false
+   WHERE id = $1`,
+    [id],
+  );
+
+  if (callType.rowCount === 0) {
+    throw new ErrorResponse("Call type not found", 404);
+  }
+
+  res.status(200).json({ message: "Call type deactivated" });
+});
+
 module.exports = {
   createCallType,
   updateCallType,
+  deleteCallType,
 };
