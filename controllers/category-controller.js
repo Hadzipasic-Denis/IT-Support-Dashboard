@@ -2,7 +2,7 @@ const pool = require("../db.js");
 const asyncWrapper = require("../utils/asyncWrapper");
 const ErrorResponse = require("../utils/ErrorResponse.js");
 
-const MAX_SLA_HOURS = 720;
+const MAX_SLA_HOURS = 120;
 
 const UPDATABLE_FIELDS = {
   name: "name",
@@ -12,7 +12,15 @@ const UPDATABLE_FIELDS = {
 };
 
 const createCategory = asyncWrapper(async (req, res, next) => {
-  const { name, slaHours, defaultAssigneeId = null } = req.body;
+  const { name, slaHours = 120, defaultAssigneeId = null } = req.body;
+
+  let cleanName;
+
+  if (name !== undefined) {
+    cleanName = typeof name === "string" ? name.trim() : "";
+    if (!cleanName)
+      throw new ErrorResponse("Name must be a non-empty string", 400);
+  }
 
   if (!Number.isInteger(slaHours) || slaHours < 1 || slaHours > MAX_SLA_HOURS) {
     throw new ErrorResponse(
@@ -42,7 +50,7 @@ const createCategory = asyncWrapper(async (req, res, next) => {
 
   const category = await pool.query(
     `INSERT INTO category (name, "slaHours", "defaultAssigneeId") VALUES ($1, $2, $3) RETURNING * `,
-    [name, slaHours, defaultAssigneeId],
+    [cleanName, slaHours, defaultAssigneeId],
   );
 
   res.status(201).json(category.rows[0]);
