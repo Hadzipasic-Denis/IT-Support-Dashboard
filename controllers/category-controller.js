@@ -41,4 +41,22 @@ const createCategory = asyncWrapper(async (req, res, next) => {
   res.status(201).json(category.rows);
 });
 
-module.exports = createCategory;
+const deleteCategory = asyncWrapper(async(req, res, next)=> {
+  const {id} = req.params
+
+  const category = await pool.query(`
+      UPDATE category SET "isActive" = false WHERE id = $1
+      `, [id]
+  )
+
+  if(category.rowCount === 0) {
+    throw new ErrorResponse("Category not found", 404)
+  }
+
+  res.status(200).json({message: "Category deactivated"})
+})
+
+module.exports = {
+  createCategory,
+  deleteCategory
+};
