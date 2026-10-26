@@ -1,6 +1,6 @@
 # IT-Support-Dashboard
 
-An IT support ticket system built from scratch as a portfolio project. It creates tickets from a support mailbox, routes them by category, asigns ticket to users(AGENTS), tracks working time against an SLA, and keeps a complete audit trail of every change.
+An IT support ticket system built from scratch as a portfolio project. It creates tickets from a support mailbox, routes them by category, assigns tickets to agents, tracks working time against an SLA, and keeps a complete audit trail of every change.
 
 This repository contains the backend API. The project is in active development; see the [roadmap](#roadmap) for what is done and what comes next.
 
@@ -72,6 +72,7 @@ Roles: `REQUESTER`, `AGENT`, `ADMIN`.
 | POST   | `/auth/register` | Admin  | Create a user                            |
 | POST   | `/auth/login`    | Public | Log in and receive the auth cookie       |
 | PUT    | `/auth/logout`   | Public | Clear the auth cookie                    |
+| GET    | `/auth/getProfile` | Authenticated | Get the logged-in user's profile |
 
 ### Users (`/user`)
 
@@ -92,9 +93,44 @@ Roles: `REQUESTER`, `AGENT`, `ADMIN`.
 | GET    | `/location/getAllLocations`  | Admin  | List all locations    |
 | GET    | `/location/getLocation/:id`  | Admin  | Get one location      |
 
+### Categories (`/category`)
+
+| Method | Path                           | Access        | Description                                 |
+| ------ | ------------------------------ | ------------- | ------------------------------------------- |
+| POST   | `/category/create`             | Admin         | Create a category                           |
+| PATCH  | `/category/update/:id`         | Admin         | Update one or more fields of a category     |
+| DELETE | `/category/delete/:id`         | Admin         | Deactivate a category                       |
+| GET    | `/category/getAllCategories`   | Agent, Admin  | List all categories                         |
+| GET    | `/category/getCategory/:id`    | Agent, Admin  | Get one category                            |
+
+Category fields:
+
+- `name`: required, unique
+- `slaHours`: whole number from 1 to 720, defaults to 120
+- `defaultAssigneeId`: optional, must be an active agent or admin. New tickets in this category are assigned to this user.
+
+### Call types (`/callType`)
+
+| Method | Path                          | Access | Description            |
+| ------ | ----------------------------- | ------ | ---------------------- |
+| POST   | `/callType/create`            | Admin  | Create a call type     |
+| PUT    | `/callType/update/:id`        | Admin  | Update a call type     |
+| DELETE | `/callType/delete/:id`        | Admin  | Deactivate a call type |
+| GET    | `/callType/getAllCallTypes`   | Admin  | List all call types    |
+| GET    | `/callType/getCallType/:id`   | Admin  | Get one call type      |
+
 ### Errors
 
-Errors go through a central error handler and are returned with an HTTP status code and a message, for example `401` (not logged in), `403` (missing permission) or `404` (not found).
+Errors go through a central error handler and are returned with an HTTP status code and a message:
+
+| Status | Meaning                                                        |
+| ------ | -------------------------------------------------------------- |
+| `400`  | Invalid input, for example a malformed id or a failed validation |
+| `401`  | Not logged in, or the token is missing                         |
+| `403`  | Logged in, but the role is not allowed                         |
+| `404`  | Resource not found                                             |
+| `409`  | Already exists, for example a duplicate email or category name |
+| `500`  | Unexpected server error                                        |
 
 ## Design decisions
 
@@ -109,7 +145,7 @@ Errors go through a central error handler and are returned with an HTTP status c
 ```
 index.js              # app setup: middleware, routers, error handler
 db.js                 # PostgreSQL connection pool
-controllers/          # request handlers (auth, user, location)
+controllers/          # request handlers (auth, user, location, category, call type)
 routes/               # Express routers
 middlewares/          # authenticate, authorize, central error handler
 utils/                # asyncWrapper, ErrorResponse
@@ -123,7 +159,7 @@ utils/                # asyncWrapper, ErrorResponse
 - [x] Auth: register with bcrypt, login with JWT cookie, logout
 - [x] Route protection and role-based authorization
 - [x] Location management
-- [ ] Categories and call types
+- [x] Categories and call types
 - [ ] Seed script: System user, admin, one location, category and call type
 - [ ] Ticket endpoints with audit history and SLA clock
 - [ ] Mailbox ingestion and reply threading

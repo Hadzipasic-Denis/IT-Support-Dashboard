@@ -29,9 +29,9 @@ const authenticate = asyncWrapper(async (req, res, next) => {
   next();
 });
 
-const authorize = (role) => {
+const authorize = (...roles) => {
   return (req, res, next) => {
-    if (role === req.user.role) {
+    if (roles.includes(req.user.role)) {
       return next();
     } else {
       throw new ErrorResponse("Insufficient permissions!", 403);
