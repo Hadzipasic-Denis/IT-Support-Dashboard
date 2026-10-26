@@ -28,19 +28,33 @@ npm install
 
 ### Environment variables
 
-Create a `.env` file in the project root:
+Copy the example file and replace the placeholder values:
 
-```
-DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
-JWT_SECRET=replace-with-a-long-random-string
-PORT=8080
+```powershell
+Copy-Item .env.example .env
 ```
 
-| Variable       | Description                                  |
-| -------------- | -------------------------------------------- |
-| `DATABASE_URL` | PostgreSQL connection string                 |
-| `JWT_SECRET`   | Secret used to sign and verify login tokens  |
-| `PORT`         | Port the API listens on (default `8080`)     |
+| Variable              | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `DATABASE_URL`        | PostgreSQL connection string                      |
+| `JWT_SECRET`          | Secret used to sign and verify login tokens       |
+| `PORT`                | Port the API listens on (default `8080`)          |
+| `SEED_ADMIN_EMAIL`    | Email of the admin created by the seed script     |
+| `SEED_ADMIN_PASSWORD` | Password of the admin created by the seed script  |
+
+### Seed the database
+
+```powershell
+npm run seed
+```
+
+This creates the data the app needs to start:
+
+- **System user:** the author of automatic changes such as email intake, category routing and SLA breaches. It is inactive and cannot log in.
+- **Admin:** created from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. Use it to log in and register further users.
+- **Lookup data:** one location, one call type and one category.
+
+The script is safe to run more than once: existing entries are skipped. Run it once on every new database, including production.
 
 ### Run
 
@@ -50,14 +64,6 @@ npm start     # plain node
 ```
 
 The API runs on `http://localhost:8080` by default.
-
-### First admin
-
-Registering new users requires an admin. Promote the first admin directly in the database:
-
-```sql
-UPDATE app_user SET role = 'ADMIN' WHERE email = 'you@example.com';
-```
 
 ## API
 
@@ -149,6 +155,7 @@ controllers/          # request handlers (auth, user, location, category, call t
 routes/               # Express routers
 middlewares/          # authenticate, authorize, central error handler
 utils/                # asyncWrapper, ErrorResponse
+scripts/seed.js       # seeds the System user, admin and lookup data
 ```
 
 ## Roadmap
@@ -160,7 +167,7 @@ utils/                # asyncWrapper, ErrorResponse
 - [x] Route protection and role-based authorization
 - [x] Location management
 - [x] Categories and call types
-- [ ] Seed script: System user, admin, one location, category and call type
+- [x] Seed script: System user, admin, one location, category and call type
 - [ ] Ticket endpoints with audit history and SLA clock
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests
