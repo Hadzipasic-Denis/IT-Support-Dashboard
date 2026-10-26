@@ -22,9 +22,9 @@ categoryRouter
   .delete(authenticate, authorize("ADMIN"), deleteCategory);
 categoryRouter
   .route("/getAllCategories")
-  .get(authenticate, authorize("ADMIN"), getAllCategories);
+  .get(authenticate, authorize("AGENT", "ADMIN"), getAllCategories);
 categoryRouter
   .route("/getCategory/:id")
-  .get(authenticate, authorize("ADMIN"), getCategory);
+  .get(authenticate, authorize("AGENT", "ADMIN"), getCategory);
 
 module.exports = categoryRouter;
