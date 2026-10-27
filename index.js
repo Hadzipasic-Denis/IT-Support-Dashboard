@@ -12,6 +12,7 @@ const userRouter = require("./routes/user-router.js");
 const locationRouter = require("./routes/location-router.js");
 const callTypeRouter = require("./routes/call-type-router.js");
 const categoryRouter = require("./routes/category-router.js");
+const ticketRouter = require("./routes/ticket-router.js");
 
 const port = process.env.PORT || 8080;
 const app = express();
@@ -25,6 +26,7 @@ app.use("/user", userRouter);
 app.use("/location", locationRouter);
 app.use("/callType", callTypeRouter);
 app.use("/category", categoryRouter);
+app.use("/ticket", ticketRouter);
 
 app.use(errorHandler);
 
