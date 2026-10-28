@@ -95,7 +95,7 @@ const createTicket = async (data, authorId) => {
     const ticketResult = await client.query(
       `INSERT INTO ticket (subject, description, "categoryId", "callTypeId", "contactEmail", "createdById", "requesterId", priority, source, "updatedAt") 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DASHBOARD', NOW()) 
-        RETURNING *`,
+        RETURNING id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"`,
       [
         cleanSubject,
         cleanDescription,
