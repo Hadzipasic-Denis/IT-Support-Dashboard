@@ -27,7 +27,7 @@ const createTicket = async (data, authorId) => {
   if (!Number.isInteger(categoryId)) {
     throw new ErrorResponse("Invalid id of categoryId", 400);
   }
-  
+
   const category = await pool.query(
     `SELECT id FROM category WHERE id = $1 AND "isActive" = true`,
     [categoryId],
@@ -66,21 +66,52 @@ const createTicket = async (data, authorId) => {
 
   const requesterId = requester.rows[0]?.id ?? null;
 
-  const ticket = await pool.query(
-    `INSERT INTO ticket (subject, description, "categoryId", "callTypeId", "contactEmail", "createdById", "requesterId", priority, source, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DASHBOARD', NOW()) RETURNING *`,
-    [
-      cleanSubject,
-      cleanDescription,
-      categoryId,
-      callTypeId,
-      cleanEmail,
-      authorId,
-      requesterId,
-      priority,
-    ],
-  );
+  const client = await pool.connect();
 
-  return ticket.rows[0];
+  try {
+    await client.query("BEGIN");
+
+    const ticketResult = await client.query(
+      `INSERT INTO ticket (subject, description, "categoryId", "callTypeId", "contactEmail", "createdById", "requesterId", priority, source, "updatedAt") 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DASHBOARD', NOW()) 
+        RETURNING *`,
+      [
+        cleanSubject,
+        cleanDescription,
+        categoryId,
+        callTypeId,
+        cleanEmail,
+        authorId,
+        requesterId,
+        priority,
+      ],
+    );
+
+    const ticket = ticketResult.rows[0];
+
+    const ticketChangeResult = await client.query(
+      `INSERT INTO ticket_change ("ticketId", "changedById")
+        VALUES ($1, $2)
+        RETURNING id`,
+      [ticket.id, authorId],
+    );
+
+    const ticketChange = ticketChangeResult.rows[0];
+
+    await client.query(
+      `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+        VALUES ($1, 'status', NULL, $2)`,
+      [ticketChange.id, ticket.status],
+    );
+
+    await client.query("COMMIT");
+    return ticket;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 };
 
 module.exports = { createTicket };
