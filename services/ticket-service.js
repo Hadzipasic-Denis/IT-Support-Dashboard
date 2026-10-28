@@ -13,6 +13,43 @@ const createTicket = async (data, authorId) => {
     priority,
   } = data;
 
+  const cleanSubject = typeof subject === "string" ? subject.trim() : "";
+  if (!cleanSubject) {
+    throw new ErrorResponse("Subject must be a non-empty string", 400);
+  }
+
+  const cleanDescription =
+    typeof description === "string" ? description.trim() : "";
+  if (!cleanDescription) {
+    throw new ErrorResponse("Description must be a non-empty string", 400);
+  }
+
+  if (!Number.isInteger(categoryId)) {
+    throw new ErrorResponse("Invalid id of categoryId", 400);
+  }
+  
+  const category = await pool.query(
+    `SELECT id FROM category WHERE id = $1 AND "isActive" = true`,
+    [categoryId],
+  );
+
+  if (category.rows.length === 0) {
+    throw new ErrorResponse("Category not found or inactive", 400);
+  }
+
+  if (!Number.isInteger(callTypeId)) {
+    throw new ErrorResponse("Invalid id of callTypeId", 400);
+  }
+
+  const callType = await pool.query(
+    `SELECT id FROM call_type WHERE id = $1 AND "isActive" = true`,
+    [callTypeId],
+  );
+
+  if (callType.rows.length === 0) {
+    throw new ErrorResponse("Call type not found or inactive", 400);
+  }
+
   if (!PRIORITIES.includes(priority)) {
     throw new ErrorResponse(
       `Priority must be one of ${PRIORITIES.join(", ")}`,
@@ -32,8 +69,8 @@ const createTicket = async (data, authorId) => {
   const ticket = await pool.query(
     `INSERT INTO ticket (subject, description, "categoryId", "callTypeId", "contactEmail", "createdById", "requesterId", priority, source, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DASHBOARD', NOW()) RETURNING *`,
     [
-      subject,
-      description,
+      cleanSubject,
+      cleanDescription,
       categoryId,
       callTypeId,
       cleanEmail,
