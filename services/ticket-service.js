@@ -1,4 +1,5 @@
 const pool = require("../db.js");
+const { SYSTEM_USER_EMAIL } = require("../utils/constants.js");
 const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
@@ -29,13 +30,22 @@ const createTicket = async (data, authorId) => {
   }
 
   const category = await pool.query(
-    `SELECT id FROM category WHERE id = $1 AND "isActive" = true`,
+    `SELECT c.id, u.id AS "assigneeId"
+      FROM category c
+      LEFT JOIN app_user u
+      ON u.id = c."defaultAssigneeId"
+      AND u."isActive" = true
+      AND u.role IN ('AGENT', 'ADMIN')
+      WHERE c.id = $1
+      AND c."isActive" = true`,
     [categoryId],
   );
 
   if (category.rows.length === 0) {
     throw new ErrorResponse("Category not found or inactive", 400);
   }
+
+  const assigneeId = category.rows[0].assigneeId;
 
   if (!Number.isInteger(callTypeId)) {
     throw new ErrorResponse("Invalid id of callTypeId", 400);
@@ -65,6 +75,17 @@ const createTicket = async (data, authorId) => {
   );
 
   const requesterId = requester.rows[0]?.id ?? null;
+
+  const systemUser = await pool.query(
+    `SELECT id FROM app_user WHERE email = $1`,
+    [SYSTEM_USER_EMAIL],
+  );
+
+  if (systemUser.rows.length === 0) {
+    throw new Error("System user missing, run npm run seed");
+  }
+
+  const systemUserId = systemUser.rows[0].id;
 
   const client = await pool.connect();
 
@@ -103,6 +124,28 @@ const createTicket = async (data, authorId) => {
         VALUES ($1, 'status', NULL, $2)`,
       [ticketChange.id, ticket.status],
     );
+
+    if (assigneeId) {
+      await client.query(
+        `INSERT INTO ticket_assignee ("ticketId", "userId") VALUES ($1, $2)`,
+        [ticket.id, assigneeId],
+      );
+
+      const routingChangeResult = await client.query(
+        `INSERT INTO ticket_change ("ticketId", "changedById", comment)
+          VALUES ($1, $2, 'Assigned by category routing')
+          RETURNING id`,
+        [ticket.id, systemUserId],
+      );
+
+      const routingChange = routingChangeResult.rows[0];
+
+      await client.query(
+        `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+          VALUES ($1, 'assignee', NULL, $2)`,
+        [routingChange.id, String(assigneeId)],
+      );
+    }
 
     await client.query("COMMIT");
     return ticket;
