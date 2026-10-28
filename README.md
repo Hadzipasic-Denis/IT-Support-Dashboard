@@ -125,6 +125,32 @@ Category fields:
 | GET    | `/callType/getAllCallTypes`   | Admin  | List all call types    |
 | GET    | `/callType/getCallType/:id`   | Admin  | Get one call type      |
 
+### Tickets (`/ticket`)
+
+| Method | Path             | Access        | Description       |
+| ------ | ---------------- | ------------- | ----------------- |
+| POST   | `/ticket/create` | Authenticated | Create a ticket   |
+
+Request body:
+
+| Field          | Required | Description                                                                 |
+| -------------- | -------- | --------------------------------------------------------------------------- |
+| `subject`      | Yes      | Non-empty text                                                              |
+| `description`  | Yes      | Non-empty text                                                              |
+| `categoryId`   | Yes      | Id of an active category                                                    |
+| `callTypeId`   | Yes      | Id of an active call type                                                   |
+| `contactEmail` | No       | Agents and admins only. Creates the ticket on behalf of someone else, for example after a phone call. Defaults to the logged-in user's email. |
+| `priority`     | No       | Agents and admins only. `LOW`, `MEDIUM` or `HIGH`, defaults to `MEDIUM`.     |
+
+Requesters always create tickets for themselves with priority `MEDIUM`. Values they send for `contactEmail` or `priority` are ignored.
+
+When a ticket is created:
+
+- `createdById` is the logged-in user, and `requesterId` is the active user whose email matches `contactEmail` (or empty for external contacts).
+- The creation is logged in the ticket history as a status change to `NEW`.
+- If the category has an active default assignee, the ticket is assigned to that user. This assignment is logged separately, with the System user as author.
+- The ticket, its assignment and its history are written in one database transaction, so a ticket never exists without its history.
+
 ### Errors
 
 Errors go through a central error handler and are returned with an HTTP status code and a message:
@@ -143,7 +169,8 @@ Errors go through a central error handler and are returned with an HTTP status c
 - **Soft delete:** users and lookup entries (locations, categories, call types) are deactivated with `isActive` instead of being deleted, because tickets and their history reference them.
 - **Audit log:** every ticket change is stored as a save action (`ticket_change`) with one row per changed field (`ticket_change_item`).
 - **Pausable SLA clock:** SLA time only runs while a ticket is `IN_PROGRESS`. The limit comes from the ticket's category (default 120 hours).
-- **Category routing:** each category can have a default assignee for new tickets.
+- **Category routing:** each category can have a default assignee for new tickets. Automatic changes like this are authored by a seeded System user, so the history always shows who or what made a change.
+- **Service layer:** ticket logic lives in `services/ticket-service.js`, separate from the HTTP controllers, so dashboard requests and the later mailbox ingestion share the same rules.
 - **Email intake:** tickets are created from a support mailbox; the message id prevents duplicates and allows reply threading.
 
 ## Project structure
@@ -151,10 +178,11 @@ Errors go through a central error handler and are returned with an HTTP status c
 ```
 index.js              # app setup: middleware, routers, error handler
 db.js                 # PostgreSQL connection pool
-controllers/          # request handlers (auth, user, location, category, call type)
+controllers/          # request handlers (auth, user, location, category, call type, ticket)
+services/             # business logic shared across entry points (ticket service)
 routes/               # Express routers
 middlewares/          # authenticate, authorize, central error handler
-utils/                # asyncWrapper, ErrorResponse
+utils/                # asyncWrapper, ErrorResponse, shared constants
 scripts/seed.js       # seeds the System user, admin and lookup data
 ```
 
@@ -168,7 +196,9 @@ scripts/seed.js       # seeds the System user, admin and lookup data
 - [x] Location management
 - [x] Categories and call types
 - [x] Seed script: System user, admin, one location, category and call type
-- [ ] Ticket endpoints with audit history and SLA clock
+- [x] Ticket creation with audit history and category routing
+- [ ] Ticket list and detail endpoints
+- [ ] Ticket updates with audit history and SLA clock
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests
 - [ ] Frontend (React + Vite) wired to the API

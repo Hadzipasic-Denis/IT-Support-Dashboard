@@ -2,6 +2,7 @@ require("dotenv/config");
 const bcrypt = require("bcrypt");
 const pool = require("../db.js");
 const crypto = require("node:crypto");
+const { SYSTEM_USER_EMAIL } = require("../utils/constants.js");
 
 const seed = async () => {
   if (!process.env.SEED_ADMIN_EMAIL || !process.env.SEED_ADMIN_PASSWORD) {
@@ -18,9 +19,9 @@ const seed = async () => {
 
   await pool.query(
     `
-    INSERT INTO app_user (name, email, password, role, "isActive") VALUES ('System', 'system@demo.com', $1, 'REQUESTER', false) ON CONFLICT (email) DO NOTHING
+    INSERT INTO app_user (name, email, password, role, "isActive") VALUES ('System', $1, $2, 'REQUESTER', false) ON CONFLICT (email) DO NOTHING
     `,
-    [hashSystemPassword],
+    [SYSTEM_USER_EMAIL, hashSystemPassword],
   );
 
   await pool.query(
