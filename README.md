@@ -84,7 +84,7 @@ Roles: `REQUESTER`, `AGENT`, `ADMIN`.
 
 | Method | Path                | Access        | Description                                |
 | ------ | ------------------- | ------------- | ------------------------------------------ |
-| GET    | `/user/getAllUsers` | Authenticated | List all users                             |
+| GET    | `/user/getAllUsers` | Admin         | List all users                             |
 | GET    | `/user/:id`         | Admin         | Get one user                               |
 | PATCH  | `/user/:id`         | Admin         | Update one or more fields of a user        |
 | DELETE | `/user/:id`         | Admin         | Deactivate a user (users are never deleted)|
@@ -127,9 +127,15 @@ Category fields:
 
 ### Tickets (`/ticket`)
 
-| Method | Path             | Access        | Description       |
-| ------ | ---------------- | ------------- | ----------------- |
-| POST   | `/ticket/create` | Authenticated | Create a ticket   |
+| Method | Path                         | Access        | Description                                  |
+| ------ | ---------------------------- | ------------- | -------------------------------------------- |
+| POST   | `/ticket/create`             | Authenticated | Create a ticket                              |
+| GET    | `/ticket/getAllTickets`      | Agent, Admin  | List all tickets that are not `DONE`         |
+| GET    | `/ticket/getTicket/:id`      | Agent, Admin  | Get any ticket                               |
+| GET    | `/ticket/getUserTickets`     | Authenticated | List the logged-in user's own tickets        |
+| GET    | `/ticket/getUserTicket/:id`  | Authenticated | Get one of the logged-in user's own tickets  |
+
+#### Creating a ticket
 
 Request body:
 
@@ -150,6 +156,12 @@ When a ticket is created:
 - The creation is logged in the ticket history as a status change to `NEW`.
 - If the category has an active default assignee, the ticket is assigned to that user. This assignment is logged separately, with the System user as author.
 - The ticket, its assignment and its history are written in one database transaction, so a ticket never exists without its history.
+
+#### Viewing tickets
+
+- Agents and admins work as one team and can see every ticket.
+- Every other user only sees tickets where they are the requester. Asking for someone else's ticket returns `404`, the same as for a ticket that does not exist, so ticket ids of other users cannot be probed.
+- The user endpoints return a fixed set of columns: `id`, `ticketNumber`, `subject`, `description`, `status`, `priority`, `categoryId`, `callTypeId`, `contactEmail`, `requesterId`, `createdById`, `source` and `submittedAt`.
 
 ### Errors
 
@@ -197,7 +209,7 @@ scripts/seed.js       # seeds the System user, admin and lookup data
 - [x] Categories and call types
 - [x] Seed script: System user, admin, one location, category and call type
 - [x] Ticket creation with audit history and category routing
-- [ ] Ticket list and detail endpoints
+- [x] Ticket list and detail endpoints
 - [ ] Ticket updates with audit history and SLA clock
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests
