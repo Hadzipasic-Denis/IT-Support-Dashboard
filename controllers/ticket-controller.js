@@ -51,7 +51,8 @@ const getUserTickets = asyncWrapper(async (req, res, next) => {
 
   const tickets = await pool.query(
     `
-    SELECT * FROM ticket WHERE "requesterId" = $1
+    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"
+    FROM ticket WHERE "requesterId" = $1
     `,
     [id],
   );
