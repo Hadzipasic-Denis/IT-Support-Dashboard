@@ -12,7 +12,7 @@ const userRouter = express.Router();
 
 userRouter.use(authenticate)
 
-userRouter.route("/getAllUsers").get(getAllUsers);
+userRouter.route("/getAllUsers").get(authenticate, authorize("ADMIN"), getAllUsers);
 userRouter
   .route("/:id")
   .get(authorize("ADMIN"), getUser)
