@@ -4,6 +4,13 @@ const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
 
+const UPDATABLE_FIELDS = {
+  status: "status",
+  priority: "priority",
+  categoryId: '"categoryId"',
+  callTypeId: '"callTypeId"',
+};
+
 const createTicket = async (data, authorId) => {
   const {
     subject,
@@ -157,4 +164,56 @@ const createTicket = async (data, authorId) => {
   }
 };
 
-module.exports = { createTicket };
+const updateTicket = async (targetTicketId, data, authorId) => {
+  const convertedTicketId = Number(targetTicketId);
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id of ticketId", 400);
+  }
+
+  const findTicket = await pool.query(`SELECT * FROM ticket WHERE id = $1`, [
+    convertedTicketId,
+  ]);
+
+  if (findTicket.rows.length === 0) {
+    throw new ErrorResponse("Ticket not found", 404);
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const setClauses = [];
+    const values = [];
+
+    for (const [key, column] of Object.entries(UPDATABLE_FIELDS)) {
+      if (data[key] !== undefined) {
+        values.push(data[key]);
+        setClauses.push(`${column} = $${values.length}`);
+      }
+    }
+
+    if (setClauses.length === 0) {
+      throw new ErrorResponse("No valid fields to update", 400);
+    }
+
+    values.push(convertedTicketId);
+
+    const sql = `UPDATE ticket SET "updatedAt" = NOW(), ${setClauses.join(", ")}
+             WHERE id = $${values.length}
+             RETURNING *`;
+
+    const ticket = await client.query(sql, values);
+
+    await client.query("COMMIT");
+    return ticket.rows[0];
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { createTicket, updateTicket };

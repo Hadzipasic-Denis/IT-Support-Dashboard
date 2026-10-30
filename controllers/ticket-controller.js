@@ -79,10 +79,25 @@ const getUserTicket = asyncWrapper(async (req, res, next) => {
   res.status(200).json(ticket.rows[0]);
 });
 
+const updateTicket = asyncWrapper(async (req, res, next) => {
+  const { id: ticketId } = req.params;
+  const { id: userId } = req.user;
+  const { status, priority, categoryId, callTypeId } = req.body;
+
+  const ticket = await ticketService.updateTicket(
+    ticketId,
+    { status, priority, categoryId, callTypeId },
+    userId,
+  );
+
+  res.status(200).json(ticket);
+});
+
 module.exports = {
   createTicket,
   getTickets,
   getTicket,
   getUserTickets,
   getUserTicket,
+  updateTicket,
 };
