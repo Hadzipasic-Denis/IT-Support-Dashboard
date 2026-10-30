@@ -1,7 +1,6 @@
 const asyncWrapper = require("../utils/asyncWrapper.js");
 const ticketService = require("../services/ticket-service.js");
 const pool = require("../db.js");
-const { json } = require("express");
 const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const createTicket = asyncWrapper(async (req, res, next) => {
@@ -47,8 +46,22 @@ const getTicket = asyncWrapper(async (req, res, next) => {
   res.status(200).json(ticket.rows[0]);
 });
 
+const getUserTickets = asyncWrapper(async (req, res, next) => {
+  const { id } = req.user;
+
+  const tickets = await pool.query(
+    `
+    SELECT * FROM ticket WHERE "requesterId" = $1
+    `,
+    [id],
+  );
+
+  res.status(200).json(tickets.rows);
+});
+
 module.exports = {
   createTicket,
   getTickets,
-  getTicket
+  getTicket,
+  getUserTickets
 };
