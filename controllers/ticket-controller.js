@@ -39,8 +39,8 @@ const getTicket = asyncWrapper(async (req, res, next) => {
     [id],
   );
 
-  if(ticket.rows.length === 0) {
-    throw new ErrorResponse("Ticket not found", 404)
+  if (ticket.rows.length === 0) {
+    throw new ErrorResponse("Ticket not found", 404);
   }
 
   res.status(200).json(ticket.rows[0]);
@@ -59,9 +59,29 @@ const getUserTickets = asyncWrapper(async (req, res, next) => {
   res.status(200).json(tickets.rows);
 });
 
+const getUserTicket = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+  const { id: userId } = req.user;
+
+  const ticket = await pool.query(
+    `
+    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"
+    FROM ticket WHERE id = $1 AND "requesterId" = $2
+    `,
+    [id, userId],
+  );
+
+  if (ticket.rows.length === 0) {
+    throw new ErrorResponse("Ticket not found", 404);
+  }
+
+  res.status(200).json(ticket.rows[0]);
+});
+
 module.exports = {
   createTicket,
   getTickets,
   getTicket,
-  getUserTickets
+  getUserTickets,
+  getUserTicket,
 };
