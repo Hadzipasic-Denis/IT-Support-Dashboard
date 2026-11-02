@@ -13,6 +13,15 @@ const UPDATABLE_FIELDS = {
   callTypeId: '"callTypeId"',
 };
 
+const validatePriority = (priorityValue) => {
+  if (!PRIORITIES.includes(priorityValue)) {
+    throw new ErrorResponse(
+      `Priority must be one of ${PRIORITIES.join(", ")}`,
+      400,
+    );
+  }
+};
+
 const createTicket = async (data, authorId) => {
   const {
     subject,
@@ -69,12 +78,7 @@ const createTicket = async (data, authorId) => {
     throw new ErrorResponse("Call type not found or inactive", 400);
   }
 
-  if (!PRIORITIES.includes(priority)) {
-    throw new ErrorResponse(
-      `Priority must be one of ${PRIORITIES.join(", ")}`,
-      400,
-    );
-  }
+  validatePriority(priority);
 
   const cleanEmail = contactEmail.trim().toLowerCase();
 
@@ -188,11 +192,8 @@ const updateTicket = async (targetTicketId, data, authorId) => {
     );
   }
 
-  if (data.priority !== undefined && !PRIORITIES.includes(data.priority)) {
-    throw new ErrorResponse(
-      `Priority must be one of ${PRIORITIES.join(", ")}`,
-      400,
-    );
+  if (data.priority !== undefined) {
+    validatePriority(data.priority);
   }
 
   const client = await pool.connect();
