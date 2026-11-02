@@ -13,6 +13,44 @@ const UPDATABLE_FIELDS = {
   callTypeId: '"callTypeId"',
 };
 
+const validateCallType = async (callTypeIdValue) => {
+  if (!Number.isInteger(callTypeIdValue)) {
+    throw new ErrorResponse("Invalid id of callTypeId", 400);
+  }
+
+  const callType = await pool.query(
+    `SELECT id FROM call_type WHERE id = $1 AND "isActive" = true`,
+    [callTypeIdValue],
+  );
+
+  if (callType.rows.length === 0) {
+    throw new ErrorResponse("Call type not found or inactive", 400);
+  }
+};
+
+const validateCategory = async (categoryIdValue) => {
+  if (!Number.isInteger(categoryIdValue)) {
+    throw new ErrorResponse("Invalid id of categoryId", 400);
+  }
+
+  const category = await pool.query(
+    `SELECT c.id, u.id AS "assigneeId"
+      FROM category c
+      LEFT JOIN app_user u
+      ON u.id = c."defaultAssigneeId"
+      AND u."isActive" = true
+      AND u.role IN ('AGENT', 'ADMIN')
+      WHERE c.id = $1
+      AND c."isActive" = true`,
+    [categoryIdValue],
+  );
+
+  if (category.rows.length === 0) {
+    throw new ErrorResponse("Category not found or inactive", 400);
+  }
+  return category.rows[0];
+};
+
 const validatePriority = (priorityValue) => {
   if (!PRIORITIES.includes(priorityValue)) {
     throw new ErrorResponse(
@@ -43,42 +81,13 @@ const createTicket = async (data, authorId) => {
     throw new ErrorResponse("Description must be a non-empty string", 400);
   }
 
-  if (!Number.isInteger(categoryId)) {
-    throw new ErrorResponse("Invalid id of categoryId", 400);
-  }
-
-  const category = await pool.query(
-    `SELECT c.id, u.id AS "assigneeId"
-      FROM category c
-      LEFT JOIN app_user u
-      ON u.id = c."defaultAssigneeId"
-      AND u."isActive" = true
-      AND u.role IN ('AGENT', 'ADMIN')
-      WHERE c.id = $1
-      AND c."isActive" = true`,
-    [categoryId],
-  );
-
-  if (category.rows.length === 0) {
-    throw new ErrorResponse("Category not found or inactive", 400);
-  }
-
-  const assigneeId = category.rows[0].assigneeId;
-
-  if (!Number.isInteger(callTypeId)) {
-    throw new ErrorResponse("Invalid id of callTypeId", 400);
-  }
-
-  const callType = await pool.query(
-    `SELECT id FROM call_type WHERE id = $1 AND "isActive" = true`,
-    [callTypeId],
-  );
-
-  if (callType.rows.length === 0) {
-    throw new ErrorResponse("Call type not found or inactive", 400);
-  }
+  await validateCallType(callTypeId);
 
   validatePriority(priority);
+
+  const category = await validateCategory(categoryId);
+
+  const assigneeId = category.assigneeId;
 
   const cleanEmail = contactEmail.trim().toLowerCase();
 
@@ -194,6 +203,14 @@ const updateTicket = async (targetTicketId, data, authorId) => {
 
   if (data.priority !== undefined) {
     validatePriority(data.priority);
+  }
+
+  if (data.callTypeId !== undefined) {
+    await validateCallType(data.callTypeId);
+  }
+
+  if (data.categoryId !== undefined) {
+    await validateCategory(data.categoryId);
   }
 
   const client = await pool.connect();
