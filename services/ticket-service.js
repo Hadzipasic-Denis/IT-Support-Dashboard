@@ -4,6 +4,8 @@ const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
 
+const STATUSES = ["NEW", "IN_PROGRESS", "WAITING_FOR_FEEDBACK", "DONE"];
+
 const UPDATABLE_FIELDS = {
   status: "status",
   priority: "priority",
@@ -177,6 +179,20 @@ const updateTicket = async (targetTicketId, data, authorId) => {
 
   if (findTicket.rows.length === 0) {
     throw new ErrorResponse("Ticket not found", 404);
+  }
+
+  if (data.status !== undefined && !STATUSES.includes(data.status)) {
+    throw new ErrorResponse(
+      `Status must be one of ${STATUSES.join(", ")}`,
+      400,
+    );
+  }
+
+  if (data.priority !== undefined && !PRIORITIES.includes(data.priority)) {
+    throw new ErrorResponse(
+      `Priority must be one of ${PRIORITIES.join(", ")}`,
+      400,
+    );
   }
 
   const client = await pool.connect();
