@@ -4,6 +4,62 @@ const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
 
+const STATUSES = ["NEW", "IN_PROGRESS", "WAITING_FOR_FEEDBACK", "DONE"];
+
+const UPDATABLE_FIELDS = {
+  status: "status",
+  priority: "priority",
+  categoryId: '"categoryId"',
+  callTypeId: '"callTypeId"',
+};
+
+const validateCallType = async (callTypeIdValue) => {
+  if (!Number.isInteger(callTypeIdValue)) {
+    throw new ErrorResponse("Invalid id of callTypeId", 400);
+  }
+
+  const callType = await pool.query(
+    `SELECT id FROM call_type WHERE id = $1 AND "isActive" = true`,
+    [callTypeIdValue],
+  );
+
+  if (callType.rows.length === 0) {
+    throw new ErrorResponse("Call type not found or inactive", 400);
+  }
+};
+
+const validateCategory = async (categoryIdValue) => {
+  if (!Number.isInteger(categoryIdValue)) {
+    throw new ErrorResponse("Invalid id of categoryId", 400);
+  }
+
+  const category = await pool.query(
+    `SELECT c.id, u.id AS "assigneeId"
+      FROM category c
+      LEFT JOIN app_user u
+      ON u.id = c."defaultAssigneeId"
+      AND u."isActive" = true
+      AND u.role IN ('AGENT', 'ADMIN')
+      WHERE c.id = $1
+      AND c."isActive" = true`,
+    [categoryIdValue],
+  );
+
+  if (category.rows.length === 0) {
+    throw new ErrorResponse("Category not found or inactive", 400);
+  }
+  return category.rows[0];
+};
+
+const validatePriority = (priorityValue) => {
+  if (!PRIORITIES.includes(priorityValue)) {
+    throw new ErrorResponse(
+      `Priority must be one of ${PRIORITIES.join(", ")}`,
+      400,
+    );
+  }
+};
+
 const createTicket = async (data, authorId) => {
   const {
     subject,
@@ -25,47 +81,13 @@ const createTicket = async (data, authorId) => {
     throw new ErrorResponse("Description must be a non-empty string", 400);
   }
 
-  if (!Number.isInteger(categoryId)) {
-    throw new ErrorResponse("Invalid id of categoryId", 400);
-  }
+  await validateCallType(callTypeId);
 
-  const category = await pool.query(
-    `SELECT c.id, u.id AS "assigneeId"
-      FROM category c
-      LEFT JOIN app_user u
-      ON u.id = c."defaultAssigneeId"
-      AND u."isActive" = true
-      AND u.role IN ('AGENT', 'ADMIN')
-      WHERE c.id = $1
-      AND c."isActive" = true`,
-    [categoryId],
-  );
+  validatePriority(priority);
 
-  if (category.rows.length === 0) {
-    throw new ErrorResponse("Category not found or inactive", 400);
-  }
+  const category = await validateCategory(categoryId);
 
-  const assigneeId = category.rows[0].assigneeId;
-
-  if (!Number.isInteger(callTypeId)) {
-    throw new ErrorResponse("Invalid id of callTypeId", 400);
-  }
-
-  const callType = await pool.query(
-    `SELECT id FROM call_type WHERE id = $1 AND "isActive" = true`,
-    [callTypeId],
-  );
-
-  if (callType.rows.length === 0) {
-    throw new ErrorResponse("Call type not found or inactive", 400);
-  }
-
-  if (!PRIORITIES.includes(priority)) {
-    throw new ErrorResponse(
-      `Priority must be one of ${PRIORITIES.join(", ")}`,
-      400,
-    );
-  }
+  const assigneeId = category.assigneeId;
 
   const cleanEmail = contactEmail.trim().toLowerCase();
 
@@ -157,4 +179,119 @@ const createTicket = async (data, authorId) => {
   }
 };
 
-module.exports = { createTicket };
+const updateTicket = async (targetTicketId, data, authorId) => {
+  const convertedTicketId = Number(targetTicketId);
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id of ticketId", 400);
+  }
+
+  const hasUpdatableField = Object.keys(UPDATABLE_FIELDS).some(
+    (key) => data[key] !== undefined,
+  );
+
+  if (!hasUpdatableField) {
+    throw new ErrorResponse("No valid fields to update", 400);
+  }
+
+  if (data.status !== undefined && !STATUSES.includes(data.status)) {
+    throw new ErrorResponse(
+      `Status must be one of ${STATUSES.join(", ")}`,
+      400,
+    );
+  }
+
+  if (data.priority !== undefined) {
+    validatePriority(data.priority);
+  }
+
+  if (data.callTypeId !== undefined) {
+    await validateCallType(data.callTypeId);
+  }
+
+  if (data.categoryId !== undefined) {
+    await validateCategory(data.categoryId);
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const findTicket = await client.query(
+      `SELECT status, priority, "categoryId", "callTypeId" FROM ticket WHERE id = $1 FOR UPDATE`,
+      [convertedTicketId],
+    );
+
+    if (findTicket.rows.length === 0) {
+      throw new ErrorResponse("Ticket not found", 404);
+    }
+
+    const oldTicket = findTicket.rows[0];
+    const changes = [];
+    const setClauses = [];
+    const values = [];
+
+    for (const [key, column] of Object.entries(UPDATABLE_FIELDS)) {
+      if (data[key] !== undefined && data[key] !== oldTicket[key]) {
+        values.push(data[key]);
+        setClauses.push(`${column} = $${values.length}`);
+        changes.push({
+          field: key,
+          oldValue: oldTicket[key],
+          newValue: data[key],
+        });
+      }
+    }
+
+    values.push(convertedTicketId);
+
+    if (changes.length === 0) {
+      const ticketResult = await client.query(
+        `SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt" FROM ticket WHERE id = $1`,
+        [convertedTicketId],
+      );
+      await client.query("COMMIT");
+
+      return ticketResult.rows[0];
+    }
+
+    const sql = `UPDATE ticket SET "updatedAt" = NOW(), ${setClauses.join(", ")}
+             WHERE id = $${values.length}
+             RETURNING id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"`;
+
+    const ticket = await client.query(sql, values);
+
+    const ticketChangeResult = await client.query(
+      `INSERT INTO ticket_change ("ticketId", "changedById")
+        VALUES ($1, $2)
+        RETURNING id`,
+      [convertedTicketId, authorId],
+    );
+
+    const ticketChange = ticketChangeResult.rows[0];
+
+    for (const change of changes) {
+      await client.query(
+        `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+          VALUES ($1, $2, $3, $4)`,
+        [
+          ticketChange.id,
+          change.field,
+          change.oldValue === null ? null : String(change.oldValue),
+          change.newValue === null ? null : String(change.newValue),
+        ],
+      );
+    }
+
+    await client.query("COMMIT");
+    return ticket.rows[0];
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { createTicket, updateTicket };
