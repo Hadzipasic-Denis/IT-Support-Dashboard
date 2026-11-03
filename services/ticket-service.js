@@ -262,6 +262,28 @@ const updateTicket = async (targetTicketId, data, authorId) => {
 
     const ticket = await client.query(sql, values);
 
+    const ticketChangeResult = await client.query(
+      `INSERT INTO ticket_change ("ticketId", "changedById")
+        VALUES ($1, $2)
+        RETURNING id`,
+      [convertedTicketId, authorId],
+    );
+
+    const ticketChange = ticketChangeResult.rows[0];
+
+    for (const change of changes) {
+      await client.query(
+        `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+          VALUES ($1, $2, $3, $4)`,
+        [
+          ticketChange.id,
+          change.field,
+          change.oldValue === null ? null : String(change.oldValue),
+          change.newValue === null ? null : String(change.newValue),
+        ],
+      );
+    }
+
     await client.query("COMMIT");
     return ticket.rows[0];
   } catch (err) {
