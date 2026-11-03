@@ -227,17 +227,34 @@ const updateTicket = async (targetTicketId, data, authorId) => {
       throw new ErrorResponse("Ticket not found", 404);
     }
 
+    const oldTicket = findTicket.rows[0];
+    const changes = [];
     const setClauses = [];
     const values = [];
 
     for (const [key, column] of Object.entries(UPDATABLE_FIELDS)) {
-      if (data[key] !== undefined) {
+      if (data[key] !== undefined && data[key] !== oldTicket[key]) {
         values.push(data[key]);
         setClauses.push(`${column} = $${values.length}`);
+        changes.push({
+          field: key,
+          oldValue: oldTicket[key],
+          newValue: data[key],
+        });
       }
     }
 
     values.push(convertedTicketId);
+
+    if (changes.length === 0) {
+      const ticketResult = await client.query(
+        `SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt" FROM ticket WHERE id = $1`,
+        [convertedTicketId],
+      );
+      await client.query("COMMIT");
+
+      return ticketResult.rows[0];
+    }
 
     const sql = `UPDATE ticket SET "updatedAt" = NOW(), ${setClauses.join(", ")}
              WHERE id = $${values.length}
