@@ -186,12 +186,12 @@ const updateTicket = async (targetTicketId, data, authorId) => {
     throw new ErrorResponse("Invalid id of ticketId", 400);
   }
 
-  const findTicket = await pool.query(`SELECT * FROM ticket WHERE id = $1`, [
-    convertedTicketId,
-  ]);
+  const hasUpdatableField = Object.keys(UPDATABLE_FIELDS).some(
+    (key) => data[key] !== undefined,
+  );
 
-  if (findTicket.rows.length === 0) {
-    throw new ErrorResponse("Ticket not found", 404);
+  if (!hasUpdatableField) {
+    throw new ErrorResponse("No valid fields to update", 400);
   }
 
   if (data.status !== undefined && !STATUSES.includes(data.status)) {
@@ -218,6 +218,15 @@ const updateTicket = async (targetTicketId, data, authorId) => {
   try {
     await client.query("BEGIN");
 
+    const findTicket = await client.query(
+      `SELECT status, priority, "categoryId", "callTypeId" FROM ticket WHERE id = $1 FOR UPDATE`,
+      [convertedTicketId],
+    );
+
+    if (findTicket.rows.length === 0) {
+      throw new ErrorResponse("Ticket not found", 404);
+    }
+
     const setClauses = [];
     const values = [];
 
@@ -228,15 +237,11 @@ const updateTicket = async (targetTicketId, data, authorId) => {
       }
     }
 
-    if (setClauses.length === 0) {
-      throw new ErrorResponse("No valid fields to update", 400);
-    }
-
     values.push(convertedTicketId);
 
     const sql = `UPDATE ticket SET "updatedAt" = NOW(), ${setClauses.join(", ")}
              WHERE id = $${values.length}
-             RETURNING *`;
+             RETURNING id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"`;
 
     const ticket = await client.query(sql, values);
 
