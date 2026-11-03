@@ -134,6 +134,7 @@ Category fields:
 | GET    | `/ticket/getTicket/:id`      | Agent, Admin  | Get any ticket                               |
 | GET    | `/ticket/getUserTickets`     | Authenticated | List the logged-in user's own tickets        |
 | GET    | `/ticket/getUserTicket/:id`  | Authenticated | Get one of the logged-in user's own tickets  |
+| PATCH  | `/ticket/updateTicket/:id`   | Agent, Admin  | Update one or more fields of a ticket        |
 
 #### Creating a ticket
 
@@ -162,6 +163,28 @@ When a ticket is created:
 - Agents and admins work as one team and can see every ticket.
 - Every other user only sees tickets where they are the requester. Asking for someone else's ticket returns `404`, the same as for a ticket that does not exist, so ticket ids of other users cannot be probed.
 - The user endpoints return a fixed set of columns: `id`, `ticketNumber`, `subject`, `description`, `status`, `priority`, `categoryId`, `callTypeId`, `contactEmail`, `requesterId`, `createdById`, `source` and `submittedAt`.
+
+#### Updating a ticket
+
+Request body (all fields optional, at least one is required):
+
+| Field        | Description                                               |
+| ------------ | --------------------------------------------------------- |
+| `status`     | `NEW`, `IN_PROGRESS`, `WAITING_FOR_FEEDBACK` or `DONE`    |
+| `priority`   | `LOW`, `MEDIUM` or `HIGH`                                 |
+| `categoryId` | Id of an active category                                  |
+| `callTypeId` | Id of an active call type                                 |
+
+Other fields are ignored. Subject and description stay as the requester wrote them.
+
+When a ticket is updated:
+
+- All values are validated before the database transaction starts. An invalid value returns `400` and nothing is saved.
+- The ticket row is locked while it is read and updated, so two agents saving at the same time cannot overwrite each other's history.
+- Only fields whose value actually changed are saved. If nothing changed, the ticket is returned unchanged and no history is written.
+- Each save is logged as one entry in the ticket history, with the logged-in user as author and one row per changed field holding the old and the new value.
+- Changing the category does not reassign the ticket. Category routing only applies to new tickets.
+- The response is the updated ticket with the same columns as the ticket endpoints above.
 
 ### Errors
 
@@ -210,7 +233,8 @@ scripts/seed.js       # seeds the System user, admin and lookup data
 - [x] Seed script: System user, admin, one location, category and call type
 - [x] Ticket creation with audit history and category routing
 - [x] Ticket list and detail endpoints
-- [ ] Ticket updates with audit history and SLA clock
+- [x] Ticket updates with audit history
+- [ ] SLA clock
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests
 - [ ] Frontend (React + Vite) wired to the API
