@@ -162,7 +162,8 @@ When a ticket is created:
 
 - Agents and admins work as one team and can see every ticket.
 - Every other user only sees tickets where they are the requester. Asking for someone else's ticket returns `404`, the same as for a ticket that does not exist, so ticket ids of other users cannot be probed.
-- The user endpoints return a fixed set of columns: `id`, `ticketNumber`, `subject`, `description`, `status`, `priority`, `categoryId`, `callTypeId`, `contactEmail`, `requesterId`, `createdById`, `source` and `submittedAt`.
+- The staff endpoints (`getAllTickets`, `getTicket`) return every column of the ticket.
+- The user endpoints return a fixed set of columns: `id`, `ticketNumber`, `subject`, `description`, `status`, `priority`, `categoryId`, `callTypeId`, `contactEmail`, `requesterId`, `createdById`, `source`, `submittedAt` and the [SLA fields](#sla-clock).
 
 #### Updating a ticket
 
@@ -184,7 +185,36 @@ When a ticket is updated:
 - Only fields whose value actually changed are saved. If nothing changed, the ticket is returned unchanged and no history is written.
 - Each save is logged as one entry in the ticket history, with the logged-in user as author and one row per changed field holding the old and the new value.
 - Changing the category does not reassign the ticket. Category routing only applies to new tickets.
-- The response is the updated ticket with the same columns as the ticket endpoints above.
+- A status change starts, pauses or stops the [SLA clock](#sla-clock) in the same transaction.
+- The response is the updated ticket, including the SLA fields.
+
+#### SLA clock
+
+Every ticket has a time limit, taken from its category (`slaHours`, default 120 hours). The limit counts working time, not calendar time: the clock only runs while the ticket is `IN_PROGRESS`.
+
+| Status change                      | Effect on the clock                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| To `IN_PROGRESS`                   | The clock starts. The breach forecast is set to now plus the remaining time. |
+| From `IN_PROGRESS` to any other    | The clock pauses. The time of this run is added to the worked time.         |
+| To `DONE`                          | `resolvedAt` is set.                                                       |
+| From `DONE` back to another status | The ticket is reopened: `resolvedAt` is cleared, the worked time is kept.   |
+
+Fields on the ticket:
+
+| Field               | Meaning                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `slaWorkedSeconds`  | Working time used so far, from all previous runs of the clock                                   |
+| `slaClockStartedAt` | When the current run started. Empty while the clock is paused.                                  |
+| `slaBreachAt`       | Forecast: when the limit will be reached if the clock keeps running. Empty while paused.        |
+| `slaBreachedAt`     | Fact: when the limit was exceeded. Set once and never changed afterwards.                       |
+| `resolvedAt`        | When the ticket was set to `DONE`                                                               |
+
+The calculation lives in `services/sla-service.js` as a pure function, so it can be tested without a database. SLA fields are derived values and are not written to the ticket history; the status change that caused them is.
+
+Known limitations:
+
+- A breach is recorded when the clock is paused or stopped. A ticket that stays `IN_PROGRESS` past its limit is only marked once its status changes. Until then, `slaBreachAt` already shows that the limit has passed.
+- Changing the category of a running ticket does not recalculate `slaBreachAt` with the new limit.
 
 ### Errors
 
@@ -203,7 +233,7 @@ Errors go through a central error handler and are returned with an HTTP status c
 
 - **Soft delete:** users and lookup entries (locations, categories, call types) are deactivated with `isActive` instead of being deleted, because tickets and their history reference them.
 - **Audit log:** every ticket change is stored as a save action (`ticket_change`) with one row per changed field (`ticket_change_item`).
-- **Pausable SLA clock:** SLA time only runs while a ticket is `IN_PROGRESS`. The limit comes from the ticket's category (default 120 hours).
+- **Pausable SLA clock:** SLA time only runs while a ticket is `IN_PROGRESS`. The limit comes from the ticket's category (default 120 hours). The server calculates the SLA state, and the frontend only displays it.
 - **Category routing:** each category can have a default assignee for new tickets. Automatic changes like this are authored by a seeded System user, so the history always shows who or what made a change.
 - **Service layer:** ticket logic lives in `services/ticket-service.js`, separate from the HTTP controllers, so dashboard requests and the later mailbox ingestion share the same rules.
 - **Email intake:** tickets are created from a support mailbox; the message id prevents duplicates and allows reply threading.
@@ -214,7 +244,7 @@ Errors go through a central error handler and are returned with an HTTP status c
 index.js              # app setup: middleware, routers, error handler
 db.js                 # PostgreSQL connection pool
 controllers/          # request handlers (auth, user, location, category, call type, ticket)
-services/             # business logic shared across entry points (ticket service)
+services/             # business logic shared across entry points (ticket service, SLA clock)
 routes/               # Express routers
 middlewares/          # authenticate, authorize, central error handler
 utils/                # asyncWrapper, ErrorResponse, shared constants
@@ -234,7 +264,7 @@ scripts/seed.js       # seeds the System user, admin and lookup data
 - [x] Ticket creation with audit history and category routing
 - [x] Ticket list and detail endpoints
 - [x] Ticket updates with audit history
-- [ ] SLA clock
+- [x] SLA clock: pausable working-time limit per category
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests
 - [ ] Frontend (React + Vite) wired to the API
