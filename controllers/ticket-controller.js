@@ -51,7 +51,7 @@ const getUserTickets = asyncWrapper(async (req, res, next) => {
 
   const tickets = await pool.query(
     `
-    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"
+    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById",source, "submittedAt", "slaWorkedSeconds", "slaClockStartedAt", "slaBreachAt", "slaBreachedAt", "resolvedAt"
     FROM ticket WHERE "requesterId" = $1
     `,
     [id],
@@ -66,7 +66,7 @@ const getUserTicket = asyncWrapper(async (req, res, next) => {
 
   const ticket = await pool.query(
     `
-    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"
+    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById",source, "submittedAt", "slaWorkedSeconds", "slaClockStartedAt", "slaBreachAt", "slaBreachedAt", "resolvedAt"
     FROM ticket WHERE id = $1 AND "requesterId" = $2
     `,
     [id, userId],
