@@ -1,5 +1,6 @@
 const pool = require("../db.js");
 const { SYSTEM_USER_EMAIL } = require("../utils/constants.js");
+const { computeSla } = require("./sla-service.js");
 const ErrorResponse = require("../utils/ErrorResponse.js");
 
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
@@ -12,6 +13,11 @@ const UPDATABLE_FIELDS = {
   categoryId: '"categoryId"',
   callTypeId: '"callTypeId"',
 };
+
+const TICKET_COLUMNS = `id, "ticketNumber", subject, description, status, priority,
+  "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source,
+  "submittedAt", "slaWorkedSeconds", "slaClockStartedAt", "slaBreachAt",
+  "slaBreachedAt", "resolvedAt"`;
 
 const validateCallType = async (callTypeIdValue) => {
   if (!Number.isInteger(callTypeIdValue)) {
@@ -117,7 +123,7 @@ const createTicket = async (data, authorId) => {
     const ticketResult = await client.query(
       `INSERT INTO ticket (subject, description, "categoryId", "callTypeId", "contactEmail", "createdById", "requesterId", priority, source, "updatedAt") 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'DASHBOARD', NOW()) 
-        RETURNING id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"`,
+        RETURNING ${TICKET_COLUMNS}`,
       [
         cleanSubject,
         cleanDescription,
@@ -219,7 +225,7 @@ const updateTicket = async (targetTicketId, data, authorId) => {
     await client.query("BEGIN");
 
     const findTicket = await client.query(
-      `SELECT status, priority, "categoryId", "callTypeId" FROM ticket WHERE id = $1 FOR UPDATE`,
+      `SELECT ${TICKET_COLUMNS} FROM ticket WHERE id = $1 FOR UPDATE`,
       [convertedTicketId],
     );
 
@@ -244,11 +250,34 @@ const updateTicket = async (targetTicketId, data, authorId) => {
       }
     }
 
+    const statusChanged = changes.some((change) => change.field === "status");
+
+    if (statusChanged) {
+      const categoryId = data.categoryId ?? oldTicket.categoryId;
+
+      const categoryResult = await client.query(
+        `SELECT "slaHours" FROM category WHERE id = $1`,
+        [categoryId],
+      );
+
+      const sla = computeSla(
+        oldTicket,
+        data.status,
+        new Date(),
+        categoryResult.rows[0].slaHours,
+      );
+
+      for (const [key, value] of Object.entries(sla)) {
+        values.push(value);
+        setClauses.push(`"${key}" = $${values.length}`);
+      }
+    }
+
     values.push(convertedTicketId);
 
     if (changes.length === 0) {
       const ticketResult = await client.query(
-        `SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt" FROM ticket WHERE id = $1`,
+        `SELECT ${TICKET_COLUMNS} FROM ticket WHERE id = $1`,
         [convertedTicketId],
       );
       await client.query("COMMIT");
@@ -258,7 +287,7 @@ const updateTicket = async (targetTicketId, data, authorId) => {
 
     const sql = `UPDATE ticket SET "updatedAt" = NOW(), ${setClauses.join(", ")}
              WHERE id = $${values.length}
-             RETURNING id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById", source, "submittedAt"`;
+             RETURNING ${TICKET_COLUMNS}`;
 
     const ticket = await client.query(sql, values);
 
