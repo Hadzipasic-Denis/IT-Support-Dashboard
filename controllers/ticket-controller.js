@@ -93,6 +93,14 @@ const updateTicket = asyncWrapper(async (req, res, next) => {
   res.status(200).json(ticket);
 });
 
+const getTicketHistory = asyncWrapper(async (req, res, next) => {
+  const { id } = req.params;
+
+  const ticketHistory = await ticketService.getTicketHistory(id, req.user);
+
+  res.status(200).json(ticketHistory);
+});
+
 module.exports = {
   createTicket,
   getTickets,
@@ -100,4 +108,5 @@ module.exports = {
   getUserTickets,
   getUserTicket,
   updateTicket,
+  getTicketHistory
 };
