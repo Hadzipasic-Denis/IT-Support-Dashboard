@@ -19,7 +19,7 @@ const createTicket = asyncWrapper(async (req, res, next) => {
     req.user.id,
   );
 
-  res.status(201).json(ticket);
+  res.status(201).json(withSlaState(ticket, new Date()));
 });
 
 const getTickets = asyncWrapper(async (req, res, next) => {
@@ -109,7 +109,7 @@ const updateTicket = asyncWrapper(async (req, res, next) => {
     userId,
   );
 
-  res.status(200).json(ticket);
+  res.status(200).json(withSlaState(ticket, new Date()));
 });
 
 const getTicketHistory = asyncWrapper(async (req, res, next) => {
