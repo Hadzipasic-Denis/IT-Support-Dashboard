@@ -65,6 +65,14 @@ npm start     # plain node
 
 The API runs on `http://localhost:8080` by default.
 
+### Test
+
+```powershell
+npm test
+```
+
+Runs the unit tests in `tests/` with Node's built-in test runner. No database is needed.
+
 ## API
 
 All protected routes read the JWT from the `access_token` cookie, which is set on login. On every request the user is loaded from the database, so deactivated users and role changes take effect immediately.
@@ -135,6 +143,7 @@ Category fields:
 | GET    | `/ticket/getUserTickets`     | Authenticated | List the logged-in user's own tickets        |
 | GET    | `/ticket/getUserTicket/:id`  | Authenticated | Get one of the logged-in user's own tickets  |
 | PATCH  | `/ticket/updateTicket/:id`   | Agent, Admin  | Update one or more fields of a ticket        |
+| GET    | `/ticket/getTicketHistory/:id` | Authenticated | Get the change history of a ticket         |
 
 #### Creating a ticket
 
@@ -216,6 +225,38 @@ Known limitations:
 - A breach is recorded when the clock is paused or stopped. A ticket that stays `IN_PROGRESS` past its limit is only marked once its status changes. Until then, `slaBreachAt` already shows that the limit has passed.
 - Changing the category of a running ticket does not recalculate `slaBreachAt` with the new limit.
 
+#### Ticket history
+
+`GET /ticket/getTicketHistory/:id` returns every change of a ticket, oldest first. Each change is one save action with its author, an optional comment and the fields it changed:
+
+```json
+[
+  {
+    "id": 4,
+    "changedAt": "2026-10-28T20:28:05.527Z",
+    "comment": null,
+    "author": { "id": 6, "name": "ph" },
+    "items": [
+      { "field": "status", "oldValue": null, "newValue": "NEW", "oldLabel": null, "newLabel": null }
+    ]
+  },
+  {
+    "id": 5,
+    "changedAt": "2026-10-28T20:28:05.527Z",
+    "comment": "Assigned by category routing",
+    "author": { "id": 7, "name": "System" },
+    "items": [
+      { "field": "assignee", "oldValue": null, "newValue": "6", "oldLabel": null, "newLabel": "ph" }
+    ]
+  }
+]
+```
+
+- The visibility rule is the same as for the ticket itself: agents and admins see the history of every ticket, everyone else only of their own tickets. Any other ticket returns `404`.
+- Changes are sorted by time and then by id. Changes saved in the same transaction share one timestamp, and the id keeps their real order.
+- `oldValue` and `newValue` are stored as text. For fields that hold an id (`assignee`, `categoryId`, `callTypeId`), `oldLabel` and `newLabel` contain the readable name of the user, category or call type. For other fields they are empty, because the value is already readable.
+- The history is loaded with two queries in total, one for the changes and one for all their items, regardless of how many changes a ticket has.
+
 ### Errors
 
 Errors go through a central error handler and are returned with an HTTP status code and a message:
@@ -232,7 +273,7 @@ Errors go through a central error handler and are returned with an HTTP status c
 ## Design decisions
 
 - **Soft delete:** users and lookup entries (locations, categories, call types) are deactivated with `isActive` instead of being deleted, because tickets and their history reference them.
-- **Audit log:** every ticket change is stored as a save action (`ticket_change`) with one row per changed field (`ticket_change_item`).
+- **Audit log:** every ticket change is stored as a save action (`ticket_change`) with one row per changed field (`ticket_change_item`). Values are stored as text so one pair of columns can hold any field; ids are resolved to names when the history is read.
 - **Pausable SLA clock:** SLA time only runs while a ticket is `IN_PROGRESS`. The limit comes from the ticket's category (default 120 hours). The server calculates the SLA state, and the frontend only displays it.
 - **Category routing:** each category can have a default assignee for new tickets. Automatic changes like this are authored by a seeded System user, so the history always shows who or what made a change.
 - **Service layer:** ticket logic lives in `services/ticket-service.js`, separate from the HTTP controllers, so dashboard requests and the later mailbox ingestion share the same rules.
@@ -249,6 +290,7 @@ routes/               # Express routers
 middlewares/          # authenticate, authorize, central error handler
 utils/                # asyncWrapper, ErrorResponse, shared constants
 scripts/seed.js       # seeds the System user, admin and lookup data
+tests/                # unit tests, run with npm test
 ```
 
 ## Roadmap
@@ -265,7 +307,9 @@ scripts/seed.js       # seeds the System user, admin and lookup data
 - [x] Ticket list and detail endpoints
 - [x] Ticket updates with audit history
 - [x] SLA clock: pausable working-time limit per category
+- [x] Ticket history endpoint with readable names
+- [ ] Ticket detail: SLA state, assignee changes, comments
 - [ ] Mailbox ingestion and reply threading
-- [ ] Tests
+- [ ] Tests (SLA clock unit tests done)
 - [ ] Frontend (React + Vite) wired to the API
 - [ ] Deployment

@@ -323,4 +323,80 @@ const updateTicket = async (targetTicketId, data, authorId) => {
   }
 };
 
-module.exports = { createTicket, updateTicket };
+const getTicketHistory = async (ticketId, user) => {
+  const convertedTicketId = Number(ticketId);
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id for ticket id", 400);
+  }
+
+  const findTicket = isStaff
+    ? await pool.query(`SELECT id FROM ticket WHERE id = $1`, [
+        convertedTicketId,
+      ])
+    : await pool.query(
+        `SELECT id FROM ticket WHERE id = $1 AND "requesterId" = $2`,
+        [convertedTicketId, user.id],
+      );
+
+  if (findTicket.rows.length === 0) {
+    throw new ErrorResponse("Ticket not found", 404);
+  }
+
+  const changesResult = await pool.query(
+    `
+    SELECT c.id,
+       c."changedAt",
+       c.comment,
+       u.id   AS "authorId",
+       u.name AS "authorName"
+    FROM ticket_change c
+    JOIN app_user u ON u.id = c."changedById"
+    WHERE c."ticketId" = $1
+    ORDER BY c."changedAt", c.id`,
+    [convertedTicketId],
+  );
+
+  const history = changesResult.rows.map((row) => ({
+    id: row.id,
+    changedAt: row.changedAt,
+    comment: row.comment,
+    author: { id: row.authorId, name: row.authorName },
+    items: [],
+  }));
+
+  const changeIds = history.map((change) => change.id);
+
+  const itemsResult = await pool.query(
+  `SELECT i."changeId", i.field, i."oldValue", i."newValue",
+  COALESCE(ou.name, oc.name, ot.name) AS "oldLabel",
+  COALESCE(nu.name, nc.name, nt.name) AS "newLabel"
+  FROM ticket_change_item i
+  LEFT JOIN app_user  ou ON i.field = 'assignee'   AND ou.id::text = i."oldValue"
+  LEFT JOIN app_user  nu ON i.field = 'assignee'   AND nu.id::text = i."newValue"
+  LEFT JOIN category  oc ON i.field = 'categoryId' AND oc.id::text = i."oldValue"
+  LEFT JOIN category  nc ON i.field = 'categoryId' AND nc.id::text = i."newValue"
+  LEFT JOIN call_type ot ON i.field = 'callTypeId' AND ot.id::text = i."oldValue"
+  LEFT JOIN call_type nt ON i.field = 'callTypeId' AND nt.id::text = i."newValue"
+  WHERE i."changeId" = ANY($1)
+  ORDER BY i.id`,
+    [changeIds],
+  );
+
+  const changesById = new Map(history.map((change) => [change.id, change]));
+
+  for (const item of itemsResult.rows) {
+    changesById.get(item.changeId).items.push({
+      field: item.field,
+      oldValue: item.oldValue,
+      newValue: item.newValue,
+      oldLabel: item.oldLabel,
+      newLabel: item.newLabel,
+    });
+  }
+
+  return history;
+};
+
+module.exports = { createTicket, updateTicket, getTicketHistory };
