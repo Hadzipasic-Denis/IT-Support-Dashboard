@@ -1,6 +1,6 @@
 const { test, describe } = require("node:test");
 const assert = require("node:assert/strict");
-const { computeSla } = require("../services/sla-service.js");
+const { computeSla, getSlaState } = require("../services/sla-service.js");
 
 const at = (time) => new Date(`2026-11-04T${time}:00Z`);
 const day = (date, time) => new Date(`2026-11-${date}T${time}:00Z`);
@@ -152,3 +152,63 @@ describe("resolving and reopening", () => {
     });
   });
 });
+
+describe("SLA state", () => {
+  test("is RUNNING with the time until the forecast", () => {
+    const state = getSlaState(
+      { ...empty, slaClockStartedAt: at("10:00"), slaBreachAt: at("13:00") },
+      120,
+      at("10:00"),
+    );
+
+    assert.deepEqual(state, { state: "RUNNING", remainingSeconds: 10800 });
+  });
+
+  test("is BREACHED when the forecast has passed while running", () => {
+    const state = getSlaState(
+      { ...empty, slaClockStartedAt: at("10:00"), slaBreachAt: at("11:00") },
+      1,
+      at("12:00"),
+    );
+    
+
+    assert.deepEqual(state, { state: "BREACHED", remainingSeconds: 0 });
+  });
+
+  test("is MET when resolved in time", () => {
+    const state = getSlaState(
+      { ...empty, slaWorkedSeconds: 7200, resolvedAt: at("12:00") },
+      5,
+      at("14:00"),
+    );
+
+    assert.deepEqual(state, { state: "MET", remainingSeconds: null });
+  });
+
+  test("is BREACHED when resolved after a breach", () => {
+    const state = getSlaState(
+      {
+        ...empty,
+        slaWorkedSeconds: 7200,
+        slaBreachedAt: at("11:00"),
+        resolvedAt: at("12:00"),
+      },
+      1,
+      at("14:00"),
+    );
+
+    assert.deepEqual(state, { state: "BREACHED", remainingSeconds: 0 });
+  });
+
+  test("is PAUSED with the remaining limit", () => {
+    const state = getSlaState(
+      { ...empty, slaWorkedSeconds: 3600 },
+      2,
+      at("14:00"),
+    );
+
+    assert.deepEqual(state, { state: "PAUSED", remainingSeconds: 3600 });
+  });
+});
+
+

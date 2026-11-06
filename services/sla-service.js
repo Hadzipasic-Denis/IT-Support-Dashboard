@@ -39,4 +39,31 @@ if (newStatus === "DONE") {
   return result;
 };
 
-module.exports = { computeSla };
+const getSlaState = (ticket, slaHours, now) => {
+  const limitSeconds = slaHours * 3600;
+
+  const breachedWhileRunning =
+    ticket.slaClockStartedAt && now >= new Date(ticket.slaBreachAt);
+
+  if (ticket.slaBreachedAt || breachedWhileRunning) {
+    return { state: "BREACHED", remainingSeconds: 0 };
+  }
+
+  if (ticket.resolvedAt) {
+    return { state: "MET", remainingSeconds: null };
+  }
+
+  if (ticket.slaClockStartedAt) {
+    const remainingSeconds = Math.floor((new Date(ticket.slaBreachAt) - now) / 1000);
+    return { state: "RUNNING", remainingSeconds };
+  }
+
+  return { state: "PAUSED", remainingSeconds: limitSeconds - ticket.slaWorkedSeconds };
+};
+
+const withSlaState = (ticket, now) => ({
+  ...ticket,
+  sla: getSlaState(ticket, ticket.slaHours, now)
+})
+
+module.exports = { computeSla, getSlaState, withSlaState };

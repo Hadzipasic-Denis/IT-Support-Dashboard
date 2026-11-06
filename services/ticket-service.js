@@ -40,7 +40,7 @@ const validateCategory = async (categoryIdValue) => {
   }
 
   const category = await pool.query(
-    `SELECT c.id, u.id AS "assigneeId"
+    `SELECT c.id, c."slaHours", u.id AS "assigneeId"
       FROM category c
       LEFT JOIN app_user u
       ON u.id = c."defaultAssigneeId"
@@ -176,7 +176,7 @@ const createTicket = async (data, authorId) => {
     }
 
     await client.query("COMMIT");
-    return ticket;
+    return { ...ticket, slaHours: category.slaHours };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -251,21 +251,17 @@ const updateTicket = async (targetTicketId, data, authorId) => {
     }
 
     const statusChanged = changes.some((change) => change.field === "status");
+    const categoryId = data.categoryId ?? oldTicket.categoryId;
+
+    const categoryResult = await client.query(
+      `SELECT "slaHours" FROM category WHERE id = $1`,
+      [categoryId],
+    );
+
+    const slaHours = categoryResult.rows[0]?.slaHours ?? 120;
 
     if (statusChanged) {
-      const categoryId = data.categoryId ?? oldTicket.categoryId;
-
-      const categoryResult = await client.query(
-        `SELECT "slaHours" FROM category WHERE id = $1`,
-        [categoryId],
-      );
-
-      const sla = computeSla(
-        oldTicket,
-        data.status,
-        new Date(),
-        categoryResult.rows[0].slaHours,
-      );
+      const sla = computeSla(oldTicket, data.status, new Date(), slaHours);
 
       for (const [key, value] of Object.entries(sla)) {
         values.push(value);
@@ -282,7 +278,7 @@ const updateTicket = async (targetTicketId, data, authorId) => {
       );
       await client.query("COMMIT");
 
-      return ticketResult.rows[0];
+      return { ...ticketResult.rows[0], slaHours };
     }
 
     const sql = `UPDATE ticket SET "updatedAt" = NOW(), ${setClauses.join(", ")}
@@ -314,7 +310,7 @@ const updateTicket = async (targetTicketId, data, authorId) => {
     }
 
     await client.query("COMMIT");
-    return ticket.rows[0];
+    return { ...ticket.rows[0], slaHours };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -369,7 +365,7 @@ const getTicketHistory = async (ticketId, user) => {
   const changeIds = history.map((change) => change.id);
 
   const itemsResult = await pool.query(
-  `SELECT i."changeId", i.field, i."oldValue", i."newValue",
+    `SELECT i."changeId", i.field, i."oldValue", i."newValue",
   COALESCE(ou.name, oc.name, ot.name) AS "oldLabel",
   COALESCE(nu.name, nc.name, nt.name) AS "newLabel"
   FROM ticket_change_item i
