@@ -61,4 +61,9 @@ const getSlaState = (ticket, slaHours, now) => {
   return { state: "PAUSED", remainingSeconds: limitSeconds - ticket.slaWorkedSeconds };
 };
 
-module.exports = { computeSla, getSlaState };
+const withSlaState = (ticket, now) => ({
+  ...ticket,
+  sla: getSlaState(ticket, ticket.slaHours, now)
+})
+
+module.exports = { computeSla, getSlaState, withSlaState };

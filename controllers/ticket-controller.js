@@ -2,6 +2,7 @@ const asyncWrapper = require("../utils/asyncWrapper.js");
 const ticketService = require("../services/ticket-service.js");
 const pool = require("../db.js");
 const ErrorResponse = require("../utils/ErrorResponse.js");
+const { withSlaState } = require("../services/sla-service.js");
 
 const createTicket = asyncWrapper(async (req, res, next) => {
   const { subject, description, categoryId, callTypeId } = req.body;
@@ -23,10 +24,15 @@ const createTicket = asyncWrapper(async (req, res, next) => {
 
 const getTickets = asyncWrapper(async (req, res, next) => {
   const tickets = await pool.query(`
-    SELECT * FROM ticket WHERE status != 'DONE'
+    SELECT t.*, 
+    COALESCE(c."slaHours", 120) as "slaHours"
+    FROM ticket t
+    LEFT JOIN category c ON c.id = t."categoryId"
+    WHERE t.status != 'DONE'
     `);
 
-  res.status(200).json(tickets.rows);
+  const now = new Date();
+  res.status(200).json(tickets.rows.map((ticket) => withSlaState(ticket, now)));
 });
 
 const getTicket = asyncWrapper(async (req, res, next) => {
@@ -34,7 +40,11 @@ const getTicket = asyncWrapper(async (req, res, next) => {
 
   const ticket = await pool.query(
     `
-    SELECT * FROM ticket WHERE id = $1
+    SELECT t.*,
+    COALESCE(c."slaHours", 120) as "slaHours"
+    FROM ticket t
+    LEFT JOIN category c ON c.id = t."categoryId"
+    WHERE t.id = $1
     `,
     [id],
   );
@@ -43,7 +53,8 @@ const getTicket = asyncWrapper(async (req, res, next) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
-  res.status(200).json(ticket.rows[0]);
+  const now = new Date();
+  res.status(200).json(withSlaState(ticket.rows[0], now));
 });
 
 const getUserTickets = asyncWrapper(async (req, res, next) => {
@@ -51,13 +62,17 @@ const getUserTickets = asyncWrapper(async (req, res, next) => {
 
   const tickets = await pool.query(
     `
-    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById",source, "submittedAt", "slaWorkedSeconds", "slaClockStartedAt", "slaBreachAt", "slaBreachedAt", "resolvedAt"
-    FROM ticket WHERE "requesterId" = $1
+    SELECT t.id, t."ticketNumber", t.subject, t.description, t.status, t.priority, t."categoryId", t."callTypeId", t."contactEmail", t."requesterId", t."createdById", t.source, t."submittedAt", t."slaWorkedSeconds", t."slaClockStartedAt", t."slaBreachAt", t."slaBreachedAt", t."resolvedAt",
+    COALESCE(c."slaHours", 120) as "slaHours"
+    FROM ticket t
+    LEFT JOIN category c ON c.id = t."categoryId"
+    WHERE t."requesterId" = $1
     `,
     [id],
   );
 
-  res.status(200).json(tickets.rows);
+  const now = new Date();
+  res.status(200).json(tickets.rows.map((ticket) => withSlaState(ticket, now)));
 });
 
 const getUserTicket = asyncWrapper(async (req, res, next) => {
@@ -66,8 +81,11 @@ const getUserTicket = asyncWrapper(async (req, res, next) => {
 
   const ticket = await pool.query(
     `
-    SELECT id, "ticketNumber", subject, description, status, priority, "categoryId", "callTypeId", "contactEmail", "requesterId", "createdById",source, "submittedAt", "slaWorkedSeconds", "slaClockStartedAt", "slaBreachAt", "slaBreachedAt", "resolvedAt"
-    FROM ticket WHERE id = $1 AND "requesterId" = $2
+    SELECT t.id, t."ticketNumber", t.subject, t.description, t.status, t.priority, t."categoryId", t."callTypeId", t."contactEmail", t."requesterId", t."createdById", t.source, t."submittedAt", t."slaWorkedSeconds", t."slaClockStartedAt", t."slaBreachAt", t."slaBreachedAt", t."resolvedAt",
+    COALESCE(c."slaHours", 120) AS "slaHours"
+    FROM ticket t 
+    LEFT JOIN category c ON c.id = t."categoryId"
+    WHERE t.id = $1 AND t."requesterId" = $2
     `,
     [id, userId],
   );
@@ -76,7 +94,8 @@ const getUserTicket = asyncWrapper(async (req, res, next) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
-  res.status(200).json(ticket.rows[0]);
+  const now = new Date();
+  res.status(200).json(withSlaState(ticket.rows[0], now));
 });
 
 const updateTicket = asyncWrapper(async (req, res, next) => {
