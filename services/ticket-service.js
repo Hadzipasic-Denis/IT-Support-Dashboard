@@ -369,10 +369,18 @@ const getTicketHistory = async (ticketId, user) => {
   const changeIds = history.map((change) => change.id);
 
   const itemsResult = await pool.query(
-    `SELECT "changeId", field, "oldValue", "newValue"
-    FROM ticket_change_item
-    WHERE "changeId" = ANY($1)
-    ORDER BY id`,
+  `SELECT i."changeId", i.field, i."oldValue", i."newValue",
+  COALESCE(ou.name, oc.name, ot.name) AS "oldLabel",
+  COALESCE(nu.name, nc.name, nt.name) AS "newLabel"
+  FROM ticket_change_item i
+  LEFT JOIN app_user  ou ON i.field = 'assignee'   AND ou.id::text = i."oldValue"
+  LEFT JOIN app_user  nu ON i.field = 'assignee'   AND nu.id::text = i."newValue"
+  LEFT JOIN category  oc ON i.field = 'categoryId' AND oc.id::text = i."oldValue"
+  LEFT JOIN category  nc ON i.field = 'categoryId' AND nc.id::text = i."newValue"
+  LEFT JOIN call_type ot ON i.field = 'callTypeId' AND ot.id::text = i."oldValue"
+  LEFT JOIN call_type nt ON i.field = 'callTypeId' AND nt.id::text = i."newValue"
+  WHERE i."changeId" = ANY($1)
+  ORDER BY i.id`,
     [changeIds],
   );
 
@@ -383,6 +391,8 @@ const getTicketHistory = async (ticketId, user) => {
       field: item.field,
       oldValue: item.oldValue,
       newValue: item.newValue,
+      oldLabel: item.oldLabel,
+      newLabel: item.newLabel,
     });
   }
 
