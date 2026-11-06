@@ -344,7 +344,29 @@ const getTicketHistory = async (ticketId, user) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
-  return [];
+  const changesResult = await pool.query(
+    `
+    SELECT c.id,
+       c."changedAt",
+       c.comment,
+       u.id   AS "authorId",
+       u.name AS "authorName"
+    FROM ticket_change c
+    JOIN app_user u ON u.id = c."changedById"
+    WHERE c."ticketId" = $1
+    ORDER BY c."changedAt", c.id`,
+    [convertedTicketId],
+  );
+
+  const history = changesResult.rows.map((row) => ({
+    id: row.id,
+    changedAt: row.changedAt,
+    comment: row.comment,
+    author: { id: row.authorId, name: row.authorName },
+    items: [],
+  }));
+
+  return history;
 };
 
 module.exports = { createTicket, updateTicket, getTicketHistory };

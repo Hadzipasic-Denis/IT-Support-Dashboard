@@ -108,5 +108,5 @@ module.exports = {
   getUserTickets,
   getUserTicket,
   updateTicket,
-  getTicketHistory
+  getTicketHistory,
 };
