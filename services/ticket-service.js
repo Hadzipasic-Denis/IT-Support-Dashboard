@@ -366,6 +366,26 @@ const getTicketHistory = async (ticketId, user) => {
     items: [],
   }));
 
+  const changeIds = history.map((change) => change.id);
+
+  const itemsResult = await pool.query(
+    `SELECT "changeId", field, "oldValue", "newValue"
+    FROM ticket_change_item
+    WHERE "changeId" = ANY($1)
+    ORDER BY id`,
+    [changeIds],
+  );
+
+  const changesById = new Map(history.map((change) => [change.id, change]));
+
+  for (const item of itemsResult.rows) {
+    changesById.get(item.changeId).items.push({
+      field: item.field,
+      oldValue: item.oldValue,
+      newValue: item.newValue,
+    });
+  }
+
   return history;
 };
 
