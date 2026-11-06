@@ -195,7 +195,7 @@ When a ticket is updated:
 - Only fields whose value actually changed are saved. If nothing changed, the ticket is returned unchanged and no history is written.
 - Each save is logged as one entry in the ticket history, with the logged-in user as author and one row per changed field holding the old and the new value.
 - Changing the category does not reassign the ticket. Category routing only applies to new tickets.
-- A status change starts, pauses or stops the [SLA clock](#sla-clock) in the same transaction.
+- A status change starts, pauses or stops the [SLA clock](#sla-clock) in the same transaction. A category change applies the new category's limit: a running clock gets a new breach forecast.
 - The response is the updated ticket, including the SLA fields and the SLA state.
 
 #### SLA clock
@@ -241,7 +241,6 @@ Both calculations, the clock and the state, live in `services/sla-service.js` as
 Known limitations:
 
 - A breach is recorded when the clock is paused or stopped. A ticket that stays `IN_PROGRESS` past its limit is only marked once its status changes. Until then, its SLA state already shows `BREACHED`.
-- Changing the category of a running ticket does not recalculate `slaBreachAt` with the new limit.
 
 #### Ticket history
 

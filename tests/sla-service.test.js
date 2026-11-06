@@ -151,6 +151,65 @@ describe("resolving and reopening", () => {
       slaBreachAt: at("17:00"),
     });
   });
+
+  test("moves the forecast when the limit changes while running", () => {
+    const result = computeSla(
+      {
+        ...empty,
+        slaWorkedSeconds: 3600,
+        slaClockStartedAt: at("10:00"),
+        slaBreachAt: at("15:00"),
+      },
+      "IN_PROGRESS",
+      at("12:00"),
+      3,
+    );
+
+    assert.deepEqual(result, {
+      ...empty,
+      slaWorkedSeconds: 3600,
+      slaClockStartedAt: at("10:00"),
+      slaBreachAt: at("12:00"),
+    });
+  });
+
+  test("uses the new limit for a breach when stopping", () => {
+    const result = computeSla(
+      {
+        ...empty,
+        slaClockStartedAt: at("10:00"),
+        slaBreachAt: at("15:00"),
+      },
+      "WAITING_FOR_FEEDBACK",
+      at("12:00"),
+      1,
+    );
+
+    assert.deepEqual(result, {
+      ...empty,
+      slaWorkedSeconds: 7200,
+      slaBreachedAt: at("11:00"),
+    });
+  });
+
+  test("keeps resolvedAt when a resolved ticket is saved again", () => {
+    const result = computeSla(
+      {
+        ...empty,
+        slaWorkedSeconds: 7200,
+        resolvedAt: at("12:00"),
+      },
+      "DONE",
+      at("14:00"),
+      5,
+    );
+
+    assert.deepEqual(result, {
+      ...empty,
+      slaWorkedSeconds: 7200,
+      resolvedAt: at("12:00"),
+    });
+  });
 });
 
 describe("SLA state", () => {
@@ -170,7 +229,6 @@ describe("SLA state", () => {
       1,
       at("12:00"),
     );
-    
 
     assert.deepEqual(state, { state: "BREACHED", remainingSeconds: 0 });
   });
@@ -210,5 +268,3 @@ describe("SLA state", () => {
     assert.deepEqual(state, { state: "PAUSED", remainingSeconds: 3600 });
   });
 });
-
-

@@ -7,8 +7,18 @@ const computeSla = (ticket, newStatus, now, slaHours) => {
     resolvedAt: ticket.resolvedAt,
   };
 
+  const forecast = ticket.slaClockStartedAt
+    ? new Date(
+        new Date(ticket.slaClockStartedAt).getTime() +
+          (slaHours * 3600 - ticket.slaWorkedSeconds) * 1000,
+      )
+    : null;
+
+  if (newStatus === "IN_PROGRESS" && ticket.slaClockStartedAt) {
+    result.slaBreachAt = forecast;
+  }
+
   if (ticket.slaClockStartedAt && newStatus !== "IN_PROGRESS") {
-    const projectedBreachAt = ticket.slaBreachAt;
 
     const workedNow = Math.floor(
       (now - new Date(ticket.slaClockStartedAt)) / 1000,
@@ -19,7 +29,7 @@ const computeSla = (ticket, newStatus, now, slaHours) => {
     result.slaBreachAt = null;
 
     if (result.slaWorkedSeconds >= slaHours * 3600 && !ticket.slaBreachedAt) {
-      result.slaBreachedAt = new Date(projectedBreachAt);
+      result.slaBreachedAt = forecast;
     }
   }
 
@@ -30,11 +40,11 @@ const computeSla = (ticket, newStatus, now, slaHours) => {
     result.slaBreachAt = new Date(now.getTime() + remainingTime * 1000);
   }
 
-if (newStatus === "DONE") {
-  result.resolvedAt = now;
-} else if (ticket.resolvedAt) {
-  result.resolvedAt = null;
-}
+  if (newStatus === "DONE" && !ticket.resolvedAt) {
+    result.resolvedAt = now;
+  } else if (newStatus !== "DONE" && ticket.resolvedAt) {
+    result.resolvedAt = null;
+  }
 
   return result;
 };
@@ -54,16 +64,21 @@ const getSlaState = (ticket, slaHours, now) => {
   }
 
   if (ticket.slaClockStartedAt) {
-    const remainingSeconds = Math.floor((new Date(ticket.slaBreachAt) - now) / 1000);
+    const remainingSeconds = Math.floor(
+      (new Date(ticket.slaBreachAt) - now) / 1000,
+    );
     return { state: "RUNNING", remainingSeconds };
   }
 
-  return { state: "PAUSED", remainingSeconds: limitSeconds - ticket.slaWorkedSeconds };
+  return {
+    state: "PAUSED",
+    remainingSeconds: limitSeconds - ticket.slaWorkedSeconds,
+  };
 };
 
 const withSlaState = (ticket, now) => ({
   ...ticket,
-  sla: getSlaState(ticket, ticket.slaHours, now)
-})
+  sla: getSlaState(ticket, ticket.slaHours, now),
+});
 
 module.exports = { computeSla, getSlaState, withSlaState };

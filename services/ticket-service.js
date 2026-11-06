@@ -259,9 +259,17 @@ const updateTicket = async (targetTicketId, data, authorId) => {
     );
 
     const slaHours = categoryResult.rows[0]?.slaHours ?? 120;
+    const categoryChanged = changes.some(
+      (change) => change.field === "categoryId",
+    );
 
-    if (statusChanged) {
-      const sla = computeSla(oldTicket, data.status, new Date(), slaHours);
+    if (statusChanged || categoryChanged) {
+      const sla = computeSla(
+        oldTicket,
+        data.status ?? oldTicket.status,
+        new Date(),
+        slaHours,
+      );
 
       for (const [key, value] of Object.entries(sla)) {
         values.push(value);
