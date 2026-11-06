@@ -173,6 +173,7 @@ When a ticket is created:
 - Every other user only sees tickets where they are the requester. Asking for someone else's ticket returns `404`, the same as for a ticket that does not exist, so ticket ids of other users cannot be probed.
 - The staff endpoints (`getAllTickets`, `getTicket`) return every column of the ticket.
 - The user endpoints return a fixed set of columns: `id`, `ticketNumber`, `subject`, `description`, `status`, `priority`, `categoryId`, `callTypeId`, `contactEmail`, `requesterId`, `createdById`, `source`, `submittedAt` and the [SLA fields](#sla-clock).
+- Every ticket response, from the list, detail, create and update endpoints, also contains the category's `slaHours` and the calculated [SLA state](#sla-state).
 
 #### Updating a ticket
 
@@ -195,7 +196,7 @@ When a ticket is updated:
 - Each save is logged as one entry in the ticket history, with the logged-in user as author and one row per changed field holding the old and the new value.
 - Changing the category does not reassign the ticket. Category routing only applies to new tickets.
 - A status change starts, pauses or stops the [SLA clock](#sla-clock) in the same transaction.
-- The response is the updated ticket, including the SLA fields.
+- The response is the updated ticket, including the SLA fields and the SLA state.
 
 #### SLA clock
 
@@ -218,11 +219,28 @@ Fields on the ticket:
 | `slaBreachedAt`     | Fact: when the limit was exceeded. Set once and never changed afterwards.                       |
 | `resolvedAt`        | When the ticket was set to `DONE`                                                               |
 
-The calculation lives in `services/sla-service.js` as a pure function, so it can be tested without a database. SLA fields are derived values and are not written to the ticket history; the status change that caused them is.
+#### SLA state
+
+The server calculates the SLA state of each ticket at the moment of the request and adds it to every ticket response as `sla`. The frontend only displays it.
+
+```json
+"sla": { "state": "RUNNING", "remainingSeconds": 10800 }
+```
+
+| State      | When                                                                    | `remainingSeconds`             |
+| ---------- | ----------------------------------------------------------------------- | ------------------------------ |
+| `RUNNING`  | The clock is running and the limit has not been reached                 | Seconds until the forecast     |
+| `PAUSED`   | The clock is not running and the ticket is not resolved                 | Working time left of the limit |
+| `MET`      | The ticket is `DONE` without a breach                                   | `null`                         |
+| `BREACHED` | A breach was recorded, or the forecast has passed while the clock runs  | `0`                            |
+
+`BREACHED` wins over every other state, so a ticket resolved after its limit stays `BREACHED`. A ticket without a category uses the default of 120 hours.
+
+Both calculations, the clock and the state, live in `services/sla-service.js` as pure functions, so they can be tested without a database. SLA fields are derived values and are not written to the ticket history; the status change that caused them is.
 
 Known limitations:
 
-- A breach is recorded when the clock is paused or stopped. A ticket that stays `IN_PROGRESS` past its limit is only marked once its status changes. Until then, `slaBreachAt` already shows that the limit has passed.
+- A breach is recorded when the clock is paused or stopped. A ticket that stays `IN_PROGRESS` past its limit is only marked once its status changes. Until then, its SLA state already shows `BREACHED`.
 - Changing the category of a running ticket does not recalculate `slaBreachAt` with the new limit.
 
 #### Ticket history
@@ -308,8 +326,9 @@ tests/                # unit tests, run with npm test
 - [x] Ticket updates with audit history
 - [x] SLA clock: pausable working-time limit per category
 - [x] Ticket history endpoint with readable names
-- [ ] Ticket detail: SLA state, assignee changes, comments
+- [x] SLA state in every ticket response
+- [ ] Ticket detail: assignee changes, comments
 - [ ] Mailbox ingestion and reply threading
-- [ ] Tests (SLA clock unit tests done)
+- [ ] Tests (SLA clock and SLA state unit tests done)
 - [ ] Frontend (React + Vite) wired to the API
 - [ ] Deployment
