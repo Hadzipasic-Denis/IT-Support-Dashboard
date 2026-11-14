@@ -144,6 +144,8 @@ Category fields:
 | GET    | `/ticket/getUserTicket/:id`  | Authenticated | Get one of the logged-in user's own tickets  |
 | PATCH  | `/ticket/updateTicket/:id`   | Agent, Admin  | Update one or more fields of a ticket        |
 | GET    | `/ticket/getTicketHistory/:id` | Authenticated | Get the change history of a ticket         |
+| POST   | `/ticket/addAssignee/:id`    | Agent, Admin  | Assign a user to a ticket                    |
+| DELETE | `/ticket/removeAssignee/:id/:userId` | Agent, Admin | Remove a user from a ticket         |
 
 #### Creating a ticket
 
@@ -174,6 +176,7 @@ When a ticket is created:
 - The staff endpoints (`getAllTickets`, `getTicket`) return every column of the ticket.
 - The user endpoints return a fixed set of columns: `id`, `ticketNumber`, `subject`, `description`, `status`, `priority`, `categoryId`, `callTypeId`, `contactEmail`, `requesterId`, `createdById`, `source`, `submittedAt` and the [SLA fields](#sla-clock).
 - Every ticket response, from the list, detail, create and update endpoints, also contains the category's `slaHours` and the calculated [SLA state](#sla-state).
+- The list and detail endpoints also contain `assignees`: the `id` and `name` of every assigned user, or an empty array.
 
 #### Updating a ticket
 
@@ -197,6 +200,15 @@ When a ticket is updated:
 - Changing the category does not reassign the ticket. Category routing only applies to new tickets.
 - A status change starts, pauses or stops the [SLA clock](#sla-clock) in the same transaction. A category change applies the new category's limit: a running clock gets a new breach forecast.
 - The response is the updated ticket, including the SLA fields and the SLA state.
+
+#### Assignees
+
+A ticket can have several assignees. `addAssignee` takes `{ "userId": 6 }` in the body; `removeAssignee` takes both ids in the URL.
+
+- Only active agents and admins can be assigned. Any user can be removed, including one who was deactivated since.
+- Assigning a user twice returns `409`. Removing a user who is not assigned returns `404`.
+- Each change is logged in the ticket history as an `assignee` change, in the same transaction.
+- The response is the ticket's updated list of assignees (`201` after adding, `200` after removing).
 
 #### SLA clock
 
@@ -326,7 +338,8 @@ tests/                # unit tests, run with npm test
 - [x] SLA clock: pausable working-time limit per category
 - [x] Ticket history endpoint with readable names
 - [x] SLA state in every ticket response
-- [ ] Ticket detail: assignee changes, comments
+- [x] Assignees: shown on tickets, added and removed with history
+- [ ] Ticket comments
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests (SLA clock and SLA state unit tests done)
 - [ ] Frontend (React + Vite) wired to the API
