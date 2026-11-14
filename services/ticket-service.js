@@ -66,6 +66,30 @@ const validatePriority = (priorityValue) => {
   }
 };
 
+const findVisibleTicket = async (ticketId, user) => {
+  const convertedTicketId = Number(ticketId);
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id for ticket id", 400);
+  }
+
+  const findTicket = isStaff
+    ? await pool.query(`SELECT id FROM ticket WHERE id = $1`, [
+        convertedTicketId,
+      ])
+    : await pool.query(
+        `SELECT id FROM ticket WHERE id = $1 AND "requesterId" = $2`,
+        [convertedTicketId, user.id],
+      );
+
+  if (findTicket.rows.length === 0) {
+    throw new ErrorResponse("Ticket not found", 404);
+  }
+
+  return findTicket.rows[0].id;
+};
+
 const createTicket = async (data, authorId) => {
   const {
     subject,
@@ -328,25 +352,7 @@ const updateTicket = async (targetTicketId, data, authorId) => {
 };
 
 const getTicketHistory = async (ticketId, user) => {
-  const convertedTicketId = Number(ticketId);
-  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
-
-  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
-    throw new ErrorResponse("Invalid id for ticket id", 400);
-  }
-
-  const findTicket = isStaff
-    ? await pool.query(`SELECT id FROM ticket WHERE id = $1`, [
-        convertedTicketId,
-      ])
-    : await pool.query(
-        `SELECT id FROM ticket WHERE id = $1 AND "requesterId" = $2`,
-        [convertedTicketId, user.id],
-      );
-
-  if (findTicket.rows.length === 0) {
-    throw new ErrorResponse("Ticket not found", 404);
-  }
+  const convertedTicketId = await findVisibleTicket(ticketId, user);
 
   const changesResult = await pool.query(
     `
