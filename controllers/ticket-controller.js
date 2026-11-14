@@ -31,8 +31,17 @@ const getTickets = asyncWrapper(async (req, res, next) => {
     WHERE t.status != 'DONE'
     `);
 
+  const ticketIds = tickets.rows.map((ticket) => ticket.id);
+  const assigneesByTicket =
+    await ticketService.getAssigneesForTickets(ticketIds);
+
   const now = new Date();
-  res.status(200).json(tickets.rows.map((ticket) => withSlaState(ticket, now)));
+  res.status(200).json(
+    tickets.rows.map((ticket) => ({
+      ...withSlaState(ticket, now),
+      assignees: assigneesByTicket.get(ticket.id),
+    })),
+  );
 });
 
 const getTicket = asyncWrapper(async (req, res, next) => {
@@ -53,8 +62,10 @@ const getTicket = asyncWrapper(async (req, res, next) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
+  const assignees = await ticketService.getAssignees(ticket.rows[0].id);
+
   const now = new Date();
-  res.status(200).json(withSlaState(ticket.rows[0], now));
+  res.status(200).json({ ...withSlaState(ticket.rows[0], now), assignees });
 });
 
 const getUserTickets = asyncWrapper(async (req, res, next) => {
@@ -71,8 +82,17 @@ const getUserTickets = asyncWrapper(async (req, res, next) => {
     [id],
   );
 
+  const ticketIds = tickets.rows.map((ticket) => ticket.id);
+  const assigneesByTicket =
+    await ticketService.getAssigneesForTickets(ticketIds);
+
   const now = new Date();
-  res.status(200).json(tickets.rows.map((ticket) => withSlaState(ticket, now)));
+  res.status(200).json(
+    tickets.rows.map((ticket) => ({
+      ...withSlaState(ticket, now),
+      assignees: assigneesByTicket.get(ticket.id),
+    })),
+  );
 });
 
 const getUserTicket = asyncWrapper(async (req, res, next) => {
@@ -94,8 +114,10 @@ const getUserTicket = asyncWrapper(async (req, res, next) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
+  const assignees = await ticketService.getAssignees(ticket.rows[0].id);
+
   const now = new Date();
-  res.status(200).json(withSlaState(ticket.rows[0], now));
+  res.status(200).json({ ...withSlaState(ticket.rows[0], now), assignees });
 });
 
 const updateTicket = asyncWrapper(async (req, res, next) => {
@@ -120,6 +142,29 @@ const getTicketHistory = asyncWrapper(async (req, res, next) => {
   res.status(200).json(ticketHistory);
 });
 
+const addAssignee = asyncWrapper(async (req, res, next) => {
+  const { id: ticketId } = req.params;
+  const { id: authorId } = req.user;
+  const { userId } = req.body;
+
+  const assignees = await ticketService.addAssignee(ticketId, userId, authorId);
+
+  res.status(201).json(assignees);
+});
+
+const removeAssignee = asyncWrapper(async (req, res, next) => {
+  const { id: ticketId, userId } = req.params;
+  const { id: authorId } = req.user;
+
+  const assignees = await ticketService.removeAssignee(
+    ticketId,
+    userId,
+    authorId,
+  );
+
+  res.status(200).json(assignees);
+});
+
 module.exports = {
   createTicket,
   getTickets,
@@ -128,4 +173,6 @@ module.exports = {
   getUserTicket,
   updateTicket,
   getTicketHistory,
+  addAssignee,
+  removeAssignee
 };

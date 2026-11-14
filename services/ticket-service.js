@@ -403,4 +403,175 @@ const getTicketHistory = async (ticketId, user) => {
   return history;
 };
 
-module.exports = { createTicket, updateTicket, getTicketHistory };
+const getAssignees = async (ticketId) => {
+  const result = await pool.query(
+    `SELECT u.id, u.name
+    FROM ticket_assignee a
+    JOIN app_user u ON u.id = a."userId"
+    WHERE a."ticketId" = $1
+    ORDER BY u.name`,
+    [ticketId],
+  );
+  return result.rows;
+};
+
+const getAssigneesForTickets = async (ticketIds) => {
+  const result = await pool.query(
+    `SELECT a."ticketId", u.id, u.name
+    FROM ticket_assignee a
+    JOIN app_user u ON u.id = a."userId"
+    WHERE a."ticketId" = ANY($1)
+    ORDER BY u.name`,
+    [ticketIds],
+  );
+
+  const assigneesByTicket = new Map(ticketIds.map((id) => [id, []]));
+
+  for (const row of result.rows) {
+    assigneesByTicket.get(row.ticketId).push({ id: row.id, name: row.name });
+  }
+
+  return assigneesByTicket;
+};
+
+const addAssignee = async (ticketId, userId, authorId) => {
+  const convertedUserId = Number(userId);
+  const convertedTicketId = Number(ticketId);
+
+  if (!Number.isInteger(convertedUserId) || convertedUserId < 1) {
+    throw new ErrorResponse("Invalid id of userId", 400);
+  }
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id of ticketId", 400);
+  }
+
+  const user = await pool.query(
+    `SELECT id FROM app_user WHERE id = $1 AND "isActive" = true AND role IN ('AGENT', 'ADMIN')`,
+    [convertedUserId],
+  );
+
+  if (user.rows.length === 0) {
+    throw new ErrorResponse(
+      "User not found or not allowed to take action",
+      400,
+    );
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const ticket = await client.query(
+      `SELECT id FROM ticket WHERE id = $1 FOR UPDATE`,
+      [convertedTicketId],
+    );
+
+    if (ticket.rows.length === 0) {
+      throw new ErrorResponse("Ticket not found", 404);
+    }
+
+    await client.query(
+      `INSERT INTO ticket_assignee ("ticketId", "userId") VALUES ($1, $2)`,
+      [ticket.rows[0].id, user.rows[0].id],
+    );
+
+    const ticketChangeResult = await client.query(
+      `INSERT INTO ticket_change ("ticketId", "changedById")
+        VALUES ($1, $2)
+        RETURNING id`,
+      [ticket.rows[0].id, authorId],
+    );
+
+    const ticketChange = ticketChangeResult.rows[0];
+
+    await client.query(
+      `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+        VALUES ($1, 'assignee', NULL, $2)`,
+      [ticketChange.id, String(user.rows[0].id)],
+    );
+
+    await client.query("COMMIT");
+
+    return getAssignees(convertedTicketId);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+const removeAssignee = async (ticketId, userId, authorId) => {
+  const convertedUserId = Number(userId);
+  const convertedTicketId = Number(ticketId);
+
+  if (!Number.isInteger(convertedUserId) || convertedUserId < 1) {
+    throw new ErrorResponse("Invalid id of userId", 400);
+  }
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id of ticketId", 400);
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const ticket = await client.query(
+      `SELECT id FROM ticket WHERE id = $1 FOR UPDATE`,
+      [convertedTicketId],
+    );
+
+    if (ticket.rows.length === 0) {
+      throw new ErrorResponse("Ticket not found", 404);
+    }
+
+    const removed = await client.query(
+      `DELETE FROM ticket_assignee
+       WHERE "ticketId" = $1 AND "userId" = $2
+       RETURNING "userId"`,
+      [ticket.rows[0].id, convertedUserId],
+    );
+
+    if (removed.rows.length === 0) {
+      throw new ErrorResponse("Assignee not found", 404);
+    }
+
+    const ticketChangeResult = await client.query(
+      `INSERT INTO ticket_change ("ticketId", "changedById")
+        VALUES ($1, $2)
+        RETURNING id`,
+      [ticket.rows[0].id, authorId],
+    );
+
+    const ticketChange = ticketChangeResult.rows[0];
+
+    await client.query(
+      `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+        VALUES ($1, 'assignee', $2, NULL)`,
+      [ticketChange.id, String(convertedUserId)],
+    );
+
+    await client.query("COMMIT");
+
+    return getAssignees(convertedTicketId);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = {
+  createTicket,
+  updateTicket,
+  getTicketHistory,
+  getAssignees,
+  getAssigneesForTickets,
+  addAssignee,
+  removeAssignee,
+};
