@@ -9,6 +9,7 @@ const {
   getUserTicket,
   updateTicket,
   getTicketHistory,
+  addAssignee,
 } = require("../controllers/ticket-controller");
 
 const ticketRouter = express.Router();
@@ -26,5 +27,8 @@ ticketRouter
   .route("/updateTicket/:id")
   .patch(authenticate, authorize("ADMIN", "AGENT"), updateTicket);
 ticketRouter.route("/getTicketHistory/:id").get(authenticate, getTicketHistory);
+ticketRouter
+  .route("/addAssignee/:id")
+  .post(authenticate, authorize("ADMIN", "AGENT"), addAssignee);
 
 module.exports = ticketRouter;

@@ -434,10 +434,80 @@ const getAssigneesForTickets = async (ticketIds) => {
   return assigneesByTicket;
 };
 
+const addAssignee = async (ticketId, userId, authorId) => {
+  const convertedUserId = Number(userId);
+  const convertedTicketId = Number(ticketId);
+
+  if (!Number.isInteger(convertedUserId) || convertedUserId < 1) {
+    throw new ErrorResponse("Invalid id of userId", 400);
+  }
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id of ticketId", 400);
+  }
+
+  const user = await pool.query(
+    `SELECT id FROM app_user WHERE id = $1 AND "isActive" = true AND role IN ('AGENT', 'ADMIN')`,
+    [convertedUserId],
+  );
+
+  if (user.rows.length === 0) {
+    throw new ErrorResponse(
+      "User not found or not allowed to take action",
+      400,
+    );
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const ticket = await client.query(
+      `SELECT id FROM ticket WHERE id = $1 FOR UPDATE`,
+      [convertedTicketId],
+    );
+
+    if (ticket.rows.length === 0) {
+      throw new ErrorResponse("Ticket not found", 404);
+    }
+
+    await client.query(
+      `INSERT INTO ticket_assignee ("ticketId", "userId") VALUES ($1, $2)`,
+      [ticket.rows[0].id, user.rows[0].id],
+    );
+
+    const ticketChangeResult = await client.query(
+      `INSERT INTO ticket_change ("ticketId", "changedById")
+        VALUES ($1, $2)
+        RETURNING id`,
+      [ticket.rows[0].id, authorId],
+    );
+
+    const ticketChange = ticketChangeResult.rows[0];
+
+    await client.query(
+      `INSERT INTO ticket_change_item ("changeId", field, "oldValue", "newValue")
+        VALUES ($1, 'assignee', NULL, $2)`,
+      [ticketChange.id, String(user.rows[0].id)],
+    );
+
+    await client.query("COMMIT");
+
+    return getAssignees(convertedTicketId);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   createTicket,
   updateTicket,
   getTicketHistory,
   getAssignees,
   getAssigneesForTickets,
+  addAssignee,
 };

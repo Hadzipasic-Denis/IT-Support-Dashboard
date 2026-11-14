@@ -142,6 +142,16 @@ const getTicketHistory = asyncWrapper(async (req, res, next) => {
   res.status(200).json(ticketHistory);
 });
 
+const addAssignee = asyncWrapper(async (req, res, next) => {
+  const { id: ticketId } = req.params;
+  const { id: authorId } = req.user;
+  const { userId } = req.body;
+
+  const assignees = await ticketService.addAssignee(ticketId, userId, authorId);
+
+  res.status(201).json(assignees);
+});
+
 module.exports = {
   createTicket,
   getTickets,
@@ -150,4 +160,5 @@ module.exports = {
   getUserTicket,
   updateTicket,
   getTicketHistory,
+  addAssignee,
 };
