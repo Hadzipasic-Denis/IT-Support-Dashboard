@@ -415,4 +415,29 @@ const getAssignees = async (ticketId) => {
   return result.rows;
 };
 
-module.exports = { createTicket, updateTicket, getTicketHistory, getAssignees };
+const getAssigneesForTickets = async (ticketIds) => {
+  const result = await pool.query(
+    `SELECT a."ticketId", u.id, u.name
+    FROM ticket_assignee a
+    JOIN app_user u ON u.id = a."userId"
+    WHERE a."ticketId" = ANY($1)
+    ORDER BY u.name`,
+    [ticketIds],
+  );
+
+  const assigneesByTicket = new Map(ticketIds.map((id) => [id, []]));
+
+  for (const row of result.rows) {
+    assigneesByTicket.get(row.ticketId).push({ id: row.id, name: row.name });
+  }
+
+  return assigneesByTicket;
+};
+
+module.exports = {
+  createTicket,
+  updateTicket,
+  getTicketHistory,
+  getAssignees,
+  getAssigneesForTickets,
+};
