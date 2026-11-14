@@ -403,4 +403,16 @@ const getTicketHistory = async (ticketId, user) => {
   return history;
 };
 
-module.exports = { createTicket, updateTicket, getTicketHistory };
+const getAssignees = async (ticketId) => {
+  const result = await pool.query(
+    `SELECT u.id, u.name
+    FROM ticket_assignee a
+    JOIN app_user u ON u.id = a."userId"
+    WHERE a."ticketId" = $1
+    ORDER BY u.name`,
+    [ticketId],
+  );
+  return result.rows;
+};
+
+module.exports = { createTicket, updateTicket, getTicketHistory, getAssignees };

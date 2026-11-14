@@ -53,8 +53,10 @@ const getTicket = asyncWrapper(async (req, res, next) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
+  const assignees = await ticketService.getAssignees(ticket.rows[0].id);
+
   const now = new Date();
-  res.status(200).json(withSlaState(ticket.rows[0], now));
+  res.status(200).json({ ...withSlaState(ticket.rows[0], now), assignees });
 });
 
 const getUserTickets = asyncWrapper(async (req, res, next) => {
@@ -94,8 +96,10 @@ const getUserTicket = asyncWrapper(async (req, res, next) => {
     throw new ErrorResponse("Ticket not found", 404);
   }
 
+  const assignees = await ticketService.getAssignees(ticket.rows[0].id);
+
   const now = new Date();
-  res.status(200).json(withSlaState(ticket.rows[0], now));
+  res.status(200).json({ ...withSlaState(ticket.rows[0], now), assignees });
 });
 
 const updateTicket = asyncWrapper(async (req, res, next) => {
