@@ -66,6 +66,30 @@ const validatePriority = (priorityValue) => {
   }
 };
 
+const findVisibleTicket = async (ticketId, user) => {
+  const convertedTicketId = Number(ticketId);
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
+    throw new ErrorResponse("Invalid id for ticket id", 400);
+  }
+
+  const findTicket = isStaff
+    ? await pool.query(`SELECT id FROM ticket WHERE id = $1`, [
+        convertedTicketId,
+      ])
+    : await pool.query(
+        `SELECT id FROM ticket WHERE id = $1 AND "requesterId" = $2`,
+        [convertedTicketId, user.id],
+      );
+
+  if (findTicket.rows.length === 0) {
+    throw new ErrorResponse("Ticket not found", 404);
+  }
+
+  return findTicket.rows[0].id;
+};
+
 const createTicket = async (data, authorId) => {
   const {
     subject,
@@ -328,25 +352,7 @@ const updateTicket = async (targetTicketId, data, authorId) => {
 };
 
 const getTicketHistory = async (ticketId, user) => {
-  const convertedTicketId = Number(ticketId);
-  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
-
-  if (!Number.isInteger(convertedTicketId) || convertedTicketId < 1) {
-    throw new ErrorResponse("Invalid id for ticket id", 400);
-  }
-
-  const findTicket = isStaff
-    ? await pool.query(`SELECT id FROM ticket WHERE id = $1`, [
-        convertedTicketId,
-      ])
-    : await pool.query(
-        `SELECT id FROM ticket WHERE id = $1 AND "requesterId" = $2`,
-        [convertedTicketId, user.id],
-      );
-
-  if (findTicket.rows.length === 0) {
-    throw new ErrorResponse("Ticket not found", 404);
-  }
+  const convertedTicketId = await findVisibleTicket(ticketId, user);
 
   const changesResult = await pool.query(
     `
@@ -566,6 +572,50 @@ const removeAssignee = async (ticketId, userId, authorId) => {
   }
 };
 
+const addComment = async (ticketId, data, user) => {
+  const convertedTicketId = await findVisibleTicket(ticketId, user);
+
+  const cleanBody = typeof data.body === "string" ? data.body.trim() : "";
+
+  if (!cleanBody) {
+    throw new ErrorResponse("Comment must be a non-empty string", 400);
+  }
+
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  const isInternal = isStaff && data.isInternal === true;
+
+  const client = await pool.connect();
+
+  const comment = await client.query(
+    `
+      INSERT INTO ticket_comment ("ticketId", "authorId", body, "isInternal")
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, "ticketId", "authorId", body, "isInternal", "createdAt"
+      `,
+    [convertedTicketId, user.id, cleanBody, isInternal],
+  );
+
+  return comment.rows[0];
+};
+
+const getComments = async (ticketId, user) => {
+  const convertedTicketId = await findVisibleTicket(ticketId, user);
+
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  const comments = await pool.query(
+    `SELECT c.id, c."ticketId", c."authorId", c."authorEmail", COALESCE(u.name, c."authorEmail") AS "authorName", c.body, c."isInternal", c."createdAt" 
+    FROM ticket_comment c
+    LEFT JOIN app_user u ON u.id = c."authorId" 
+    WHERE c."ticketId" = $1 AND ($2 OR c."isInternal" = false) 
+    ORDER BY c."createdAt", c.id`,
+    [convertedTicketId, isStaff],
+  );
+
+  return comments.rows;
+};
+
 module.exports = {
   createTicket,
   updateTicket,
@@ -574,4 +624,6 @@ module.exports = {
   getAssigneesForTickets,
   addAssignee,
   removeAssignee,
+  addComment,
+  getComments,
 };
