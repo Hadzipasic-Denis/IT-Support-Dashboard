@@ -599,6 +599,23 @@ const addComment = async (ticketId, data, user) => {
   return comment.rows[0];
 };
 
+const getComments = async (ticketId, user) => {
+  const convertedTicketId = await findVisibleTicket(ticketId, user);
+
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  const comments = await pool.query(
+    `SELECT c.id, c."ticketId", c."authorId", c."authorEmail", COALESCE(u.name, c."authorEmail") AS "authorName", c.body, c."isInternal", c."createdAt" 
+    FROM ticket_comment c
+    LEFT JOIN app_user u ON u.id = c."authorId" 
+    WHERE c."ticketId" = $1 AND ($2 OR c."isInternal" = false) 
+    ORDER BY c."createdAt", c.id`,
+    [convertedTicketId, isStaff],
+  );
+
+  return comments.rows;
+};
+
 module.exports = {
   createTicket,
   updateTicket,
@@ -608,4 +625,5 @@ module.exports = {
   addAssignee,
   removeAssignee,
   addComment,
+  getComments,
 };
