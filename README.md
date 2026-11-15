@@ -146,6 +146,8 @@ Category fields:
 | GET    | `/ticket/getTicketHistory/:id` | Authenticated | Get the change history of a ticket         |
 | POST   | `/ticket/addAssignee/:id`    | Agent, Admin  | Assign a user to a ticket                    |
 | DELETE | `/ticket/removeAssignee/:id/:userId` | Agent, Admin | Remove a user from a ticket         |
+| POST   | `/ticket/addComment/:id`     | Authenticated | Add a comment to a ticket                    |
+| GET    | `/ticket/getComments/:id`    | Authenticated | List the comments of a ticket                |
 
 #### Creating a ticket
 
@@ -209,6 +211,15 @@ A ticket can have several assignees. `addAssignee` takes `{ "userId": 6 }` in th
 - Assigning a user twice returns `409`. Removing a user who is not assigned returns `404`.
 - Each change is logged in the ticket history as an `assignee` change, in the same transaction.
 - The response is the ticket's updated list of assignees (`201` after adding, `200` after removing).
+
+#### Comments
+
+Comments are the conversation on a ticket. `addComment` takes `{ "body": "...", "isInternal": true }`; `body` must be non-empty text.
+
+- Anyone who can see the ticket can comment on it. Other tickets return `404`.
+- Agents and admins can mark a comment as internal. For requesters, `isInternal` is always `false`.
+- `getComments` returns the comments oldest first. Requesters do not see internal comments.
+- Each comment has an `authorName`: the user's name, or the sender's email for comments from people without an account.
 
 #### SLA clock
 
@@ -339,7 +350,7 @@ tests/                # unit tests, run with npm test
 - [x] Ticket history endpoint with readable names
 - [x] SLA state in every ticket response
 - [x] Assignees: shown on tickets, added and removed with history
-- [ ] Ticket comments
+- [x] Ticket comments: public and internal
 - [ ] Mailbox ingestion and reply threading
 - [ ] Tests (SLA clock and SLA state unit tests done)
 - [ ] Frontend (React + Vite) wired to the API
