@@ -2,7 +2,11 @@ require("dotenv/config");
 const bcrypt = require("bcrypt");
 const pool = require("../db.js");
 const crypto = require("node:crypto");
-const { SYSTEM_USER_EMAIL } = require("../utils/constants.js");
+const {
+  SYSTEM_USER_EMAIL,
+  EMAIL_DEFAULT_CALL_TYPE,
+  EMAIL_DEFAULT_CATEGORY,
+} = require("../utils/constants.js");
 
 const seed = async () => {
   if (!process.env.SEED_ADMIN_EMAIL || !process.env.SEED_ADMIN_PASSWORD) {
@@ -35,13 +39,31 @@ const seed = async () => {
     INSERT INTO location (name) VALUES ('Berlin') ON CONFLICT (name) DO NOTHING
     `);
 
-  await pool.query(`
-    INSERT INTO call_type (name) VALUES ('Incident') ON CONFLICT (name) DO NOTHING
-    `);
+  await pool.query(
+    `
+    INSERT INTO call_type (name) VALUES ($1) ON CONFLICT (name) DO NOTHING
+    `,
+    [EMAIL_DEFAULT_CALL_TYPE],
+  );
 
-  await pool.query(`
-    INSERT INTO category (name) VALUES ('MS365') ON CONFLICT (name) DO NOTHING
-    `);
+  await pool.query(
+    `
+    INSERT INTO call_type (name) VALUES ('Incident') ON CONFLICT (name) DO NOTHING
+    `,
+  );
+
+  await pool.query(
+    `
+    INSERT INTO category (name) VALUES ($1) ON CONFLICT (name) DO NOTHING
+    `,
+    [EMAIL_DEFAULT_CATEGORY],
+  );
+
+  await pool.query(
+    `
+    INSERT INTO category (name) VALUES ('Citrix') ON CONFLICT (name) DO NOTHING
+    `,
+  );
 };
 
 seed()

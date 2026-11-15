@@ -52,7 +52,7 @@ This creates the data the app needs to start:
 
 - **System user:** the author of automatic changes such as email intake, category routing and SLA breaches. It is inactive and cannot log in.
 - **Admin:** created from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. Use it to log in and register further users.
-- **Lookup data:** one location, one call type and one category.
+- **Lookup data:** one location, the call type "Incident" and the category "Citrix", plus the call type and category "Unsorted" that email tickets get by default. Do not rename or deactivate "Unsorted", because email intake looks it up by name.
 
 The script is safe to run more than once: existing entries are skipped. Run it once on every new database, including production.
 
