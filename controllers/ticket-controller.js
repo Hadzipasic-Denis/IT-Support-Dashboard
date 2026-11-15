@@ -165,6 +165,19 @@ const removeAssignee = asyncWrapper(async (req, res, next) => {
   res.status(200).json(assignees);
 });
 
+const addComment = asyncWrapper(async (req, res, next) => {
+  const { id: ticketId } = req.params;
+  const { body, isInternal } = req.body;
+
+  const comment = await ticketService.addComment(
+    ticketId,
+    { body, isInternal },
+    req.user,
+  );
+
+  res.status(201).json(comment);
+});
+
 module.exports = {
   createTicket,
   getTickets,
@@ -174,5 +187,6 @@ module.exports = {
   updateTicket,
   getTicketHistory,
   addAssignee,
-  removeAssignee
+  removeAssignee,
+  addComment,
 };

@@ -572,6 +572,44 @@ const removeAssignee = async (ticketId, userId, authorId) => {
   }
 };
 
+const addComment = async (ticketId, data, user) => {
+  const convertedTicketId = await findVisibleTicket(ticketId, user);
+
+  const cleanBody = typeof data.body === "string" ? data.body.trim() : "";
+
+  if (!cleanBody) {
+    throw new ErrorResponse("Comment must be a non-empty string", 400);
+  }
+
+  const isStaff = ["AGENT", "ADMIN"].includes(user.role);
+
+  const isInternal = isStaff && data.isInternal === true;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const comment = await client.query(
+      `
+      INSERT INTO ticket_comment ("ticketId", "authorId", body, "isInternal")
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, "ticketId", "authorId", body, "isInternal", "createdAt"
+      `,
+      [convertedTicketId, user.id, cleanBody, isInternal],
+    );
+
+    await client.query("COMMIT");
+
+    return comment.rows[0];
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   createTicket,
   updateTicket,
@@ -580,4 +618,5 @@ module.exports = {
   getAssigneesForTickets,
   addAssignee,
   removeAssignee,
+  addComment,
 };
