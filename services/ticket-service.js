@@ -587,27 +587,16 @@ const addComment = async (ticketId, data, user) => {
 
   const client = await pool.connect();
 
-  try {
-    await client.query("BEGIN");
-
-    const comment = await client.query(
-      `
+  const comment = await client.query(
+    `
       INSERT INTO ticket_comment ("ticketId", "authorId", body, "isInternal")
       VALUES ($1, $2, $3, $4)
       RETURNING id, "ticketId", "authorId", body, "isInternal", "createdAt"
       `,
-      [convertedTicketId, user.id, cleanBody, isInternal],
-    );
+    [convertedTicketId, user.id, cleanBody, isInternal],
+  );
 
-    await client.query("COMMIT");
-
-    return comment.rows[0];
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  return comment.rows[0];
 };
 
 module.exports = {
